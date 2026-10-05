@@ -4,10 +4,10 @@
 # Toate au pachete gata compilate (wheel) pentru Windows, Python 3.13 și 3.14: nu e nevoie de compilator.
 # lxml 6.1.0 și soupsieve 2.9 sunt cele mai mici versiuni fără vulnerabilități cunoscute (pip-audit, 5 oct. 2026);
 # siguranta.yml verifică lista în fiecare săptămână, iar dependabot.yml propune actualizările.
-playwright==1.62.0
-beautifulsoup4==4.14.2
-lxml==6.1.0
-soupsieve==2.9
-greenlet==3.3.1
+playwright==1.63.0
+beautifulsoup4==4.15.0
+lxml==6.1.3
+soupsieve==2.10
+greenlet==3.5.6
 pyee==13.0.1
-typing_extensions==4.15.0
+typing_extensions==4.16.0

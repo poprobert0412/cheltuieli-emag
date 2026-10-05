@@ -3,7 +3,7 @@
 # Instalare: .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 # Versiunile sunt fixate (din pip freeze); colorama e cerută de pytest doar pe Windows.
 -r requirements.txt
-pytest==9.0.3
+pytest==9.1.1
 iniconfig==2.3.0
 packaging==26.3
 pluggy==1.6.0
