@@ -1,0 +1,54 @@
+{
+  "_ajutor": "Textele din raport pentru grupele de avertismente. Fiecare grupă din 'grupe' are: title (titlul), explanation (ce înseamnă, în română simplă), what_to_do (ce faci), affects_totals (true = cifrele din raport pot fi greșite din cauza ei) și item_text (șablonul rândului din listă). Între acolade în item_text se pot folosi doar câmpurile: missing_paid_total {seller} {status}; header_total_mismatch {header} {blocks}; pending_return_without_result {products} {step}; completed_return_without_refund {products} {mode}; other {text}. Nu schimba numele grupelor (cheile din 'grupe'). 'etichete_status' sunt statusurile scrise în română la fiecare comandă; 'valori_implicite' sunt textele folosite când o informație lipsește. După ce editezi, refaci raportul cu: python ruleaza.py --din-cache iesiri\\<rulare>",
+  "etichete_status": {
+    "DELIVERED": "livrat sau ridicat",
+    "CANCELLED": "anulat",
+    "IN_PROGRESS": "în curs, încă nelivrat",
+    "PAID_ONLY": "plătit, fără livrare de produse",
+    "UNKNOWN": "status necunoscut"
+  },
+  "valori_implicite": {
+    "produse_lipsa": "produsele nu sunt listate",
+    "pas_lipsa": "necunoscut",
+    "mod_lipsa": "nespecificat",
+    "produse_in_plus": "încă {count}",
+    "antet_cu_bloc_anulat": "comanda are un bloc anulat, iar antetul include de obicei „Total de plată” al acelui bloc"
+  },
+  "grupe": {
+    "missing_paid_total": {
+      "title": "Comenzi la care lipsește „Total plătit”",
+      "explanation": "Pagina comenzii nu arată suma plătită pentru un vânzător, deși produsele au fost livrate, ridicate sau sunt în curs. Programul nu poate verifica dacă suma plătită se potrivește cu produsele, voucherele și transportul.",
+      "affects_totals": false,
+      "what_to_do": "Deschide comanda pe eMAG și compară-o cu „Total plătit” de acolo. Totalurile principale (comandat, păstrat) se calculează din produse și nu depind de această sumă; doar „Total plătit eMAG” din cifrele de control poate ieși mai mic decât în realitate.",
+      "item_text": "{seller}: blocul nu afișează „Total plătit” ({status})"
+    },
+    "header_total_mismatch": {
+      "title": "Comenzi la care totalul din antet nu e egal cu suma blocurilor",
+      "explanation": "Totalul scris în partea de sus a comenzii diferă de suma sumelor plătite ale vânzătorilor din ea. Cauza cea mai frecventă: comanda are un bloc anulat, iar antetul include încă „Total de plată” al acelui bloc (atunci nu e o problemă). Alte cauze posibile: o reducere sau o taxă pe care programul nu a recunoscut-o, un bloc fără „Total plătit” sau o comandă modificată după plasare.",
+      "affects_totals": false,
+      "what_to_do": "La comenzile fără bloc anulat, deschide comanda pe eMAG și verifică totalul. Produsele și cantitățile (din care se calculează „păstrat”) nu depind de total; diferența afectează doar cifrele de control.",
+      "item_text": "total din antet {header}, suma blocurilor {blocks}"
+    },
+    "pending_return_without_result": {
+      "title": "Retururi cerute, dar fără rezultat",
+      "explanation": "Ai înregistrat o cerere de retur, dar pagina ei nu arată încă pasul „Restituire suma” și nici anularea cererii. Până când se termină, produsul rămâne numărat ca păstrat.",
+      "affects_totals": true,
+      "what_to_do": "Verifică starea returului pe eMAG. Când e finalizat, rulează din nou programul: produsul va fi trecut la „returnat” și totalurile se vor corecta.",
+      "item_text": "cerere de retur pentru {products}; ultimul pas înregistrat: {step}"
+    },
+    "completed_return_without_refund": {
+      "title": "Retururi finalizate fără sumă restituită afișată",
+      "explanation": "Returul e finalizat, dar pagina lui nu spune ce sumă s-a restituit. Produsul e scăzut din „păstrat” la prețul lui din comandă, însă suma restituită nu apare în cifrele de control.",
+      "affects_totals": false,
+      "what_to_do": "Dacă vrei să verifici, deschide returul pe eMAG și compară suma restituită cu prețul produsului.",
+      "item_text": "retur finalizat pentru {products}; mod de restituire: {mode}"
+    },
+    "other": {
+      "title": "Alte avertismente",
+      "explanation": "Mesaje care nu intră în celelalte grupe: o sumă care nu se potrivește, un status necunoscut, produse fără categorie sau o greșeală de configurare. Grupa e marcată ca „afectează totalurile” doar dacă vreun mesaj din ea spune că o cifră din raport poate fi greșită.",
+      "affects_totals": false,
+      "what_to_do": "Citește fiecare rând. Dacă numește o comandă, deschide-o pe eMAG și compară-o cu ce arată raportul; dacă vorbește de categorii, adaugă regula în config/categorii.json.",
+      "item_text": "{text}"
+    }
+  }
+}

@@ -1,0 +1,485 @@
+/* app.css — designul paginii aplicației locale (interfata/aplicatie.html): tokeni, teme, ecrane, componente.
+ * Ce face: stilează pagina cu un singur buton și ecranele ei (gata de start, în lucru, raport, eroare, anulat, închis)
+ * și FAQ-ul. Aceeași direcție ca site-ul explicativ („bonul”: hârtie, cerneală, marker galben, linii punctate),
+ * dar fără să încarce site.css: pagina aceasta nu depinde de un fișier care se schimbă în alt loc.
+ * Ce primește: data-theme="light|dark" pe <html> (îl pune app-theme.js); fără el decide prefers-color-scheme.
+ * Ce NU face: nu stilează raportul din interior (dashboard.css, componenta EmagDashboard).
+ * Tokenii comuni cu site.css (hârtie, cerneală, margini, focus, stări) au aceleași valori; tests/test_app_ui_static.py
+ * compară cele două fișiere, ca cele două pagini să nu se depărteze una de alta pe nesimțite.
+ * Stilurile dinamice (lățimea barei de progres) se pun din JavaScript prin CSSOM: politica de conținut refuză stilurile inline.
+ */
+
+/* ============ 1. Tokeni și teme ============ */
+:root {
+  color-scheme: light;
+  --paper: #f2f3f0;
+  --paper-2: #eaece7;
+  --card: #fbfbfa;
+  --ink: #14181c;
+  --ink-2: #444c54;
+  --ink-3: #5b646d;
+  --rule: #d6dad3;
+  --rule-2: #b9bfb4;
+  --ctl: #727b85;
+  --hl: #ffe27a;
+  --hl-wash: rgba(255, 214, 10, 0.26);
+  --on-hl: #14181c;
+  --focus: #1a55b0;
+  --ok: #17663f;
+  --warn: #7a4e00;
+  --bad: #a0231b;
+  --on-bad: #ffffff;
+  --on-ok: #ffffff;
+  --code-inline: rgba(20, 24, 28, 0.075);
+  --shadow-1: rgba(20, 24, 28, 0.22);
+  --tap: rgba(255, 226, 122, 0.45);
+  --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, Arial, sans-serif;
+  --display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, Arial, sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", ui-monospace, Menlo, "DejaVu Sans Mono", monospace;
+  --gutter: 16px;
+  --wrap-flow: 46rem;
+  --content-max: 1180px;
+  --r-s: 4px;
+  --r-m: 6px;
+  --r-l: 10px;
+  --target: 40px; /* înălțimea minimă a oricărui control (brief: ținte de cel puțin 40 px) */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0e1114;
+    --paper-2: #13171b;
+    --card: #171b20;
+    --ink: #eef1f3;
+    --ink-2: #b3bcc5;
+    --ink-3: #8f9aa5;
+    --rule: #262c33;
+    --rule-2: #3a434c;
+    --ctl: #7d8892;
+    --hl: #f2d04a;
+    --hl-wash: rgba(242, 208, 74, 0.2);
+    --on-hl: #14181c;
+    --focus: #7fb2ff;
+    --ok: #5fd39a;
+    --warn: #e6b34a;
+    --bad: #ff8b82;
+    --on-bad: #14181c;
+    --on-ok: #14181c;
+    --code-inline: rgba(255, 255, 255, 0.09);
+    --shadow-1: rgba(0, 0, 0, 0.6);
+    --tap: rgba(242, 208, 74, 0.3);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0e1114;
+  --paper-2: #13171b;
+  --card: #171b20;
+  --ink: #eef1f3;
+  --ink-2: #b3bcc5;
+  --ink-3: #8f9aa5;
+  --rule: #262c33;
+  --rule-2: #3a434c;
+  --ctl: #7d8892;
+  --hl: #f2d04a;
+  --hl-wash: rgba(242, 208, 74, 0.2);
+  --on-hl: #14181c;
+  --focus: #7fb2ff;
+  --ok: #5fd39a;
+  --warn: #e6b34a;
+  --bad: #ff8b82;
+  --on-bad: #14181c;
+  --on-ok: #14181c;
+  --code-inline: rgba(255, 255, 255, 0.09);
+  --shadow-1: rgba(0, 0, 0, 0.6);
+  --tap: rgba(242, 208, 74, 0.3);
+}
+
+/* ============ 2. Bază ============ */
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-padding-top: 16px;
+  -webkit-tap-highlight-color: var(--tap);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1rem/1.6 var(--sans);
+  font-kerning: normal;
+}
+
+h1, h2, h3, p, ul, ol, dl, dd, figure { margin: 0; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; overflow-wrap: anywhere; }
+p, li { text-wrap: pretty; }
+ul, ol { padding: 0; }
+
+a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--ink-3);
+  border-radius: 2px;
+}
+@media (hover: hover) {
+  a:hover { background: var(--hl); color: var(--on-hl); text-decoration-color: var(--on-hl); }
+}
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+main:focus, .screen__title:focus, .session__status:focus { outline: none; } /* țintele de focus mutate prin script nu sunt controale: chenarul n-ar ajuta pe nimeni */
+
+code, kbd { font-family: var(--mono); font-size: 0.875em; background: var(--code-inline); padding: 0.12em 0.38em; border-radius: var(--r-s); overflow-wrap: anywhere; }
+b, strong { font-weight: 650; }
+
+button, input { font: inherit; color: inherit; }
+a, button, summary, label, input { touch-action: manipulation; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: 200;
+  padding: 12px 18px;
+  border-radius: var(--r-m);
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+.skip-link:focus { transform: none; }
+
+.noscript { margin: 16px; padding: 14px 16px; border: 1px solid var(--bad); border-radius: var(--r-m); background: var(--card); }
+
+/* ============ 3. Antet și straturi de lățime ============ */
+.app-head { border-bottom: 1px solid var(--rule-2); background: var(--paper); }
+.app-head__in {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(calc(100% - 2 * var(--gutter)), var(--content-max));
+  margin-inline: auto;
+  padding-block: 10px;
+}
+.app-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.app-brand__mark { flex: none; color: var(--ink); }
+.app-brand__text { display: grid; line-height: 1.2; min-width: 0; }
+.app-brand__name { font: 650 1.0625rem/1.2 var(--display); }
+.app-brand__sub { font-size: 0.75rem; color: var(--ink-3); }
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--target);
+  padding: 0 12px;
+  border: 1px solid var(--ctl);
+  border-radius: var(--r-m);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+@media (hover: hover) {
+  .theme-toggle:hover { background: var(--hl); color: var(--on-hl); border-color: var(--ink); }
+}
+.theme-toggle .ic { display: none; }
+.theme-toggle[data-mode="auto"] .ic-auto,
+.theme-toggle[data-mode="light"] .ic-light,
+.theme-toggle[data-mode="dark"] .ic-dark { display: inline; }
+
+main { flex: 1 0 auto; }
+
+/* Straturile de lățime: textul curge pe lățime de citit; raportul (ecranul „gata”) primește toată lățimea lui. */
+.app-wrap { --wrap: var(--wrap-flow); width: min(calc(100% - 2 * var(--gutter)), var(--wrap)); margin-inline: auto; }
+[data-current-screen="done"] .app-wrap { --wrap: var(--content-max); }
+/* Cât pagina verifică aplicația (ecranul „loading”, câteva zecimi de secundă), FAQ-ul și subsolul nu se arată: ecranul de start e mai
+   înalt decât „loading” și le-ar împinge în jos. Fără JavaScript (clasa js lipsește) rămân vizibile: FAQ-ul se citește și atunci. */
+html.js[data-current-screen="loading"] .faq,
+html.js[data-current-screen="loading"] .app-foot { display: none; }
+/* Fără JavaScript ecranul „se verifică aplicația” n-ar mai avea cine să-l înlocuiască: nu se arată (rămân <noscript> și FAQ-ul). */
+html:not(.js) #screen-loading { display: none; }
+
+.app-title {
+  margin-top: clamp(1.5rem, 4vw, 2.75rem);
+  font-size: clamp(1.75rem, 1.2rem + 2.4vw, 2.5rem);
+  line-height: 1.15;
+  font-weight: 700;
+}
+.marker { background: linear-gradient(transparent 8%, var(--hl) 8% 94%, transparent 94%); color: var(--on-hl); padding-inline: 0.12em; white-space: nowrap; }
+
+/* ============ 4. Butoane, câmpuri ============ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--target);
+  padding: 0 18px;
+  border: 1px solid var(--ink);
+  border-radius: var(--r-m);
+  background: var(--card);
+  color: var(--ink);
+  font: 600 0.9375rem/1.2 var(--sans);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
+}
+@media (hover: hover) {
+  .btn:hover { background: var(--hl); color: var(--on-hl); border-color: var(--ink); }
+}
+.btn:active { transform: translateY(1px); }
+.btn--primary { background: var(--ink); color: var(--paper); }
+@media (hover: hover) {
+  .btn--primary:hover { background: var(--hl); color: var(--on-hl); }
+}
+.btn--xl { min-height: 56px; padding: 0 32px; font-size: 1.125rem; }
+.btn--small { padding: 0 14px; font-size: 0.875rem; }
+.btn--quiet { justify-content: flex-start; padding-inline: 0; border-color: transparent; background: transparent; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+@media (hover: hover) {
+  .btn--quiet:hover { border-color: transparent; background: var(--hl); color: var(--on-hl); }
+}
+.btn--danger { border-color: var(--bad); color: var(--bad); }
+@media (hover: hover) {
+  .btn--danger:hover:not(:disabled) { background: var(--bad); color: var(--on-bad); border-color: var(--bad); }
+}
+.btn:disabled, .btn[aria-disabled="true"] { cursor: not-allowed; border-style: dashed; border-color: var(--ctl); background: transparent; color: var(--ink-3); transform: none; }
+.btn[aria-busy="true"] { cursor: progress; }
+
+.field { display: grid; gap: 6px; min-width: 0; }
+.field__label { font-size: 0.875rem; font-weight: 600; color: var(--ink-2); }
+.field__input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ctl);
+  border-radius: var(--r-m);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 1rem; /* 16 px: iOS nu face zoom la focus */
+}
+.field__input--short { max-width: 14rem; }
+@media (hover: hover) {
+  .field__input:hover { border-color: var(--ink-3); }
+}
+.field__input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--ink); }
+.field__input[aria-invalid="true"] { border-color: var(--bad); }
+.field__hint { min-height: 1.4em; font-size: 0.875rem; color: var(--ink-3); overflow-wrap: anywhere; }
+.field__hint.is-bad { color: var(--bad); font-weight: 600; }
+.field__hint.is-ok { color: var(--ok); font-weight: 600; }
+
+.hint { font-size: 0.875rem; color: var(--ink-3); max-width: 62ch; }
+.status { min-height: 1.6em; font-size: 0.9375rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.status.is-bad { color: var(--bad); font-weight: 600; }
+.lead { margin-top: 12px; max-width: 62ch; font-size: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem); line-height: 1.55; color: var(--ink); }
+.screen .lead + p, .screen p + p { margin-top: 12px; }
+.screen p { max-width: 66ch; }
+
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 20px; }
+.actions .hint { flex: 1 1 14rem; }
+
+/* ============ 5. Ecranele ============ */
+.screen { padding-block: 24px 40px; min-height: 22rem; }
+.screen__title { font-size: 1.375rem; line-height: 1.25; font-weight: 700; scroll-margin-top: 16px; }
+.screen__wait { color: var(--ink-2); }
+
+.block { margin-top: 32px; padding-top: 20px; border-top: 1px dashed var(--rule-2); }
+.block__title { font-size: 1.0625rem; line-height: 1.3; font-weight: 700; margin-bottom: 8px; }
+.block .hint { margin-bottom: 12px; }
+.block--end { display: grid; justify-items: start; gap: 4px; }
+.block--end .hint { margin-bottom: 0; }
+
+/* (b) Gata de start */
+.start { display: grid; justify-items: start; gap: 12px; margin-top: 24px; }
+.start__error { min-height: 0; }
+.start__error:empty { display: none; }
+
+.options { width: 100%; }
+.options summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  list-style: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--ink-3);
+}
+.options summary::-webkit-details-marker { display: none; }
+.options summary::before, .faq__item summary::after {
+  content: "";
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.options[open] summary::before { transform: rotate(45deg); }
+.options__body { padding: 8px 0 4px; }
+
+.demo { margin-top: 20px; display: grid; justify-items: start; gap: 8px; }
+
+.session__status { font-weight: 600; margin-bottom: 4px; }
+.session__note { margin: 8px 0 0; }
+.session__note:empty { display: none; }
+.session__status::before { content: ""; display: inline-block; width: 0.625rem; height: 0.625rem; margin-right: 8px; border-radius: 50%; border: 2px solid var(--ctl); vertical-align: 0.05em; }
+.session__status[data-saved="true"]::before { background: var(--ok); border-color: var(--ok); }
+.confirm { margin-top: 16px; padding: 16px; border: 1px solid var(--bad); border-radius: var(--r-m); background: var(--card); display: grid; gap: 12px; }
+.confirm .actions { margin-top: 0; }
+
+.runs { list-style: none; display: grid; margin: 0; }
+.run { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 12px 0; border-bottom: 1px dashed var(--rule-2); }
+.run:first-child { border-top: 1px dashed var(--rule-2); }
+.run__main { min-width: 0; }
+.run__when { font-weight: 600; overflow-wrap: anywhere; }
+.run__meta { font-size: 0.875rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.run__none { font-size: 0.875rem; color: var(--ink-3); }
+.tag { display: inline-block; margin-left: 6px; padding: 0 8px; border: 1px solid var(--ink-3); border-radius: 999px; font: 600 0.6875rem/1.6 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); vertical-align: 0.1em; }
+
+/* (c) În lucru */
+.callout {
+  margin-top: 16px;
+  display: grid;
+  padding: 16px 18px;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--r-m);
+  background: var(--card);
+}
+/* Variantele stau în aceeași celulă; cea inactivă rămâne în aranjare (ascunsă pentru ochi și cititoare), deci cutia are mereu înălțimea celei mai înalte. */
+.callout__item { grid-area: 1 / 1; display: grid; align-content: start; gap: 4px; visibility: hidden; }
+.callout__item[data-active] { visibility: visible; }
+.callout__title { font: 700 1.1875rem/1.3 var(--display); }
+.callout__text { color: var(--ink-2); }
+/* Mesajul de login se accentuează fără să schimbe dimensiunea cutiei: inel în plus (box-shadow), nu bordură mai groasă. */
+.callout[data-kind="login"] { border-color: var(--ink); background: var(--hl-wash); box-shadow: 0 0 0 1px var(--ink); }
+/* Titlul mare e al VARIANTEI de login, nu al cutiei: și când e ascunsă, ea își rezervă înălțimea cu litera mare. */
+.callout__item[data-state="waiting_login"] .callout__title { font-size: 1.5rem; }
+.callout[data-kind="login"] .callout__text { color: var(--ink); }
+.callout[data-kind="warn"] { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn); }
+
+.steps { list-style: none; margin-top: 20px; border-top: 1px dashed var(--rule-2); }
+.step { display: grid; grid-template-columns: 1.5rem 1fr auto; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--rule-2); }
+.step__name { font-weight: 600; min-width: 0; }
+.step__no { display: inline-block; width: 1.25rem; margin-right: 4px; font-family: var(--mono); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.step__status { font-size: 0.875rem; color: var(--ink-3); white-space: nowrap; }
+.step__mark { position: relative; width: 1.25rem; height: 1.25rem; border-radius: 50%; border: 2px solid var(--ctl); }
+.step[data-status="active"] .step__mark { border-color: var(--ink); background: var(--hl); }
+.step[data-status="active"] .step__mark::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--ink); animation: step-pulse 1.4s ease-in-out infinite; }
+.step[data-status="active"] .step__status { color: var(--ink); font-weight: 600; }
+.step[data-status="done"] .step__mark { border-color: var(--ok); background: var(--ok); }
+.step[data-status="done"] .step__mark::after { content: ""; position: absolute; left: 0.3rem; top: 0.08rem; width: 0.3rem; height: 0.6rem; border-right: 2px solid var(--on-ok); border-bottom: 2px solid var(--on-ok); transform: rotate(40deg); }
+.step[data-status="done"] .step__status { color: var(--ok); font-weight: 600; }
+.step[data-status="skipped"] .step__mark { border-style: dashed; }
+@keyframes step-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+.progress { margin-top: 20px; }
+.progress__label { min-height: 1.6em; font-family: var(--mono); font-size: 0.9375rem; font-variant-numeric: tabular-nums; }
+.progress__bar { position: relative; height: 12px; margin-top: 6px; overflow: hidden; border: 1px solid var(--ctl); border-radius: 6px; background: var(--card); }
+.progress__fill { position: absolute; inset: 0; background: var(--ink); transform-origin: left center; transform: scaleX(0); transition: transform 0.4s ease-out; }
+.progress[data-mode="idle"] .progress__fill { transform: scaleX(0); }
+.progress[data-mode="indeterminate"] .progress__fill { width: 30%; transform: translateX(-100%); transition: none; animation: progress-slide 1.6s ease-in-out infinite; }
+@keyframes progress-slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.work__detail { min-height: 1.6em; margin-top: 10px; overflow-wrap: anywhere; } /* 1.6em = înălțimea unui rând (line-height 1.6): textul apare fără să mute nimic */
+
+/* (d) Raportul */
+.screen--report { padding-bottom: 56px; }
+.report-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+.report-head__text { min-width: 0; }
+.downloads { margin-top: 24px; }
+.downloads__list { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 10px; }
+.dl { width: 100%; min-height: 56px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 8px 14px; text-align: left; }
+.dl__name { font: 650 0.9375rem/1.2 var(--mono); }
+.dl__what { font: 400 0.8125rem/1.3 var(--sans); }
+.report { margin-top: 16px; border: 1px solid var(--rule-2); border-radius: var(--r-l); overflow: clip; }
+.report:empty { display: none; }
+
+/* (e) Eroare */
+.error-box { margin-top: 12px; padding: 14px 16px; border: 2px solid var(--bad); border-radius: var(--r-m); background: var(--card); font-weight: 600; overflow-wrap: anywhere; }
+.todo { margin: 0 0 0 1.25rem; padding: 0; display: grid; gap: 8px; max-width: 66ch; }
+.screen .block__title { margin-top: 24px; }
+
+/* ============ 6. Întrebări frecvente ============ */
+.faq { max-width: var(--wrap-flow); padding-block: 16px 56px; border-top: 1px dashed var(--rule-2); }
+.faq__title { font-size: 1.375rem; line-height: 1.25; margin-bottom: 8px; scroll-margin-top: 16px; }
+.faq__item { border-bottom: 1px dashed var(--rule-2); }
+.faq__item summary { position: relative; display: block; min-height: 52px; padding: 14px 2rem 14px 0; cursor: pointer; list-style: none; font-weight: 600; scroll-margin-top: 16px; }
+.faq__item summary::-webkit-details-marker { display: none; }
+.faq__item summary::after { position: absolute; right: 0.25rem; top: 50%; margin-top: -0.375rem; }
+.faq__item[open] summary::after { transform: rotate(45deg); margin-top: -0.5rem; }
+@media (hover: hover) {
+  .faq__item summary:hover { background: var(--hl-wash); }
+}
+.faq__body { padding: 4px 0 18px; max-width: 66ch; display: grid; gap: 10px; }
+.faq__body ol, .faq__body ul { margin: 0 0 0 1.25rem; display: grid; gap: 6px; }
+.faq__body :target { scroll-margin-top: 16px; }
+
+/* ============ 7. Subsol ============ */
+.app-foot { padding-block: 20px 28px; border-top: 1px solid var(--rule-2); font-size: 0.8125rem; color: var(--ink-3); }
+.app-foot p + p { margin-top: 4px; }
+
+/* Linkurile spre site-ul explicativ (index.html) merg doar când pagina e deschisă din folder: aplicația locală servește numai ce cere
+   aplicatie.html, deci din aplicație linkul ar da 404. Acolo se arată, în loc, cum se deschide site-ul (data-served pune app-lifecycle.js). */
+.docs-alt { display: none; }
+[data-served="app"] .docs-link { display: none; }
+[data-served="app"] .docs-alt { display: inline; }
+
+/* ============ 8. Ecrane înguste ============ */
+@media (max-width: 559px) {
+  .btn--xl { width: 100%; }
+  .start { justify-items: stretch; }
+  .demo .btn, .block--end .btn { width: 100%; }
+  .report-head .btn { width: 100%; }
+  .field__input--short { max-width: none; }
+  .theme-toggle__label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+  .theme-toggle { padding: 0 10px; }
+  .step { grid-template-columns: 1.5rem 1fr; }
+  .step__status { grid-column: 2; margin-top: -8px; }
+}
+
+/* ============ 9. Mișcare redusă și contrast forțat ============ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .progress[data-mode="indeterminate"] .progress__fill { display: none; }
+}
+
+@media (forced-colors: active) {
+  .btn, .theme-toggle, .field__input, .progress__bar, .callout, .error-box, .confirm, .report { border: 1px solid ButtonText; }
+  .btn--primary, .progress__fill { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .btn:disabled { border-color: GrayText; color: GrayText; }
+  .step__mark { border-color: ButtonText; forced-color-adjust: none; }
+  .step[data-status="active"] .step__mark, .step[data-status="done"] .step__mark { background: Highlight; border-color: Highlight; }
+  .marker { background: none; border-bottom: 3px solid Highlight; color: inherit; }
+  :focus-visible { outline-color: Highlight; }
+}

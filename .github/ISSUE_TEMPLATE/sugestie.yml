@@ -1,0 +1,37 @@
+name: Sugestie
+description: O idee pentru o funcție nouă sau pentru o îmbunătățire.
+title: "[Sugestie] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Atenție: acest Issue este public
+
+        Nu atașa și nu lipi date personale: `comenzi.json`, `analiza.json`, `retururi.json`, nimic din `iesiri/`, `logs/` sau `.profil_browser/`, nici capturi cu comenzi reale. Pentru exemple, folosește date inventate.
+
+        Proiectul nu face cereri în afara paginilor eMAG și nu trimite nimic de pe calculatorul tău; o sugestie care ar schimba asta nu poate fi acceptată.
+
+  - type: textarea
+    id: problema
+    attributes:
+      label: Ce vrei să poți face?
+      description: "Descrie nevoia, nu soluția: ce vrei să afli sau să faci mai ușor."
+    validations:
+      required: true
+
+  - type: textarea
+    id: propunere
+    attributes:
+      label: Cum ți-ai dori să funcționeze?
+      description: Un exemplu inventat ajută mult (de exemplu «trei comenzi cu același produs, la prețuri diferite»).
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmare
+    attributes:
+      label: Confirmare
+      options:
+        - label: Am verificat că textul de mai sus nu conține date personale.
+          required: true

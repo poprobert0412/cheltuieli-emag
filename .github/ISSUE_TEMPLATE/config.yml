@@ -1,0 +1,14 @@
+# Formularele de mai jos sunt singura cale de a deschide un Issue: un text liber ar invita la lipirea de date personale.
+# Link-ul de securitate merge doar după ce autorul activează „Private vulnerability reporting”
+# (Settings > Security > Private vulnerability reporting); până atunci SECURITY.md spune ce faci.
+blank_issues_enabled: false
+contact_links:
+  - name: Citește întâi README și întrebările frecvente
+    url: https://github.com/poprobert0412/cheltuieli-emag#readme
+    about: Răspunsuri la întrebările frecvente (de ce e nevoie de login, de ce diferă cifrele, ce înseamnă avertismentele).
+  - name: Instalare pas cu pas și probleme frecvente
+    url: https://github.com/poprobert0412/cheltuieli-emag/blob/main/docs/INSTALARE.md
+    about: Pașii de instalare și un tabel cu mesaje de eroare, cauze și soluții.
+  - name: Raportează o vulnerabilitate de securitate (privat)
+    url: https://github.com/poprobert0412/cheltuieli-emag/security/advisories/new
+    about: Nu descrie o vulnerabilitate într-un Issue public. Folosește raportul privat; detalii în SECURITY.md.

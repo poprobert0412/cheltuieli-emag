@@ -1,0 +1,547 @@
+{
+  "_ajutor": "Reguli de categorii. Fiecare categorie are 'patterns' (expresii regulate, pe nume NORMALIZAT: litere mici, fara diacritice) si optional 'exclude'. Prima categorie care se potriveste castiga, deci cele specifice stau primele. Produsele fara potrivire apar la 'Necategorizat' in raport. Dupa ce editezi, refaci raportul cu: python ruleaza.py --din-cache iesiri\\<rulare> Regulile care identifica un produs anume (titluri de carti, autori, modele exacte, masina ta) nu au ce cauta aici: pune-le in categorii.personal.json, langa acest fisier (vezi categorii.personal.exemplu.json). Regulile personale se evalueaza primele; fisierul personal e ignorat de git.",
+  "default_category": "Necategorizat",
+  "categories": [
+    {
+      "name": "Transport, abonamente, licențe și reduceri",
+      "patterns": [
+        "^cost transport$",
+        "^custom discount$",
+        "\\bsubscriptie\\b",
+        "^garantie electronica$",
+        "^ghidul utilizatorului$",
+        "\\bcard cadou\\b",
+        "\\bgift card\\b",
+        "\\bvoucher\\b",
+        "\\blicenta (?:electronica|software)\\b",
+        "\\bbitdefender\\b",
+        "\\bantivirus\\b",
+        "^pachet$"
+      ]
+    },
+    {
+      "name": "Asigurări (RCA)",
+      "patterns": [
+        "\\basigurare\\b"
+      ]
+    },
+    {
+      "name": "Televizoare",
+      "patterns": [
+        "\\btelevizor",
+        "\\bsmart tv\\b",
+        "\\b(?:led|oled|qled|lcd|uhd|4k) tv\\b",
+        "\\btv (?:led|oled|qled|lcd|smart)\\b"
+      ],
+      "exclude": [
+        "suport",
+        "cablu",
+        "telecomanda",
+        "antena",
+        "adaptor",
+        "stick",
+        "tv box",
+        "tuner",
+        "receiver",
+        "dvb",
+        "husa",
+        "folie",
+        "soundbar",
+        "raft",
+        "mobila",
+        "perete"
+      ]
+    },
+    {
+      "name": "Alcool",
+      "patterns": [
+        "\\bwhisk(?:y|ey)\\b",
+        "\\bwiskey\\b",
+        "\\bvodka\\b",
+        "\\bvodca\\b",
+        "\\brom\\b",
+        "\\brum\\b",
+        "\\bgin\\b",
+        "\\btequila\\b",
+        "\\bconiac\\b",
+        "\\bcognac\\b",
+        "\\bbrandy\\b",
+        "\\bvin(?:uri)?\\b",
+        "\\bsampanie\\b",
+        "\\bprosecco\\b",
+        "\\bbere\\b",
+        "\\blichior\\b",
+        "\\brachiu\\b",
+        "\\btuica\\b",
+        "\\bpalinca\\b",
+        "\\bvermut\\b",
+        "\\babsint\\b",
+        "\\bcidru\\b",
+        "\\bsake\\b",
+        "\\baperol\\b",
+        "\\baperitiv\\b",
+        "\\bjagermeister\\b",
+        "\\bjack daniel",
+        "\\bcampari\\b",
+        "\\bbaileys\\b",
+        "\\bjameson\\b",
+        "\\bjohnnie walker\\b",
+        "\\bj&b\\b",
+        "\\bsmirnoff\\b",
+        "\\babsolut\\b",
+        "\\d{1,2}(?:[.,]\\d)?\\s?%\\s*,?\\s*\\d+(?:[.,]\\d+)?\\s?(?:l|ml|cl)\\b",
+        "\\b\\d+(?:[.,]\\d+)?\\s?l\\s*,?\\s*\\d{1,2}(?:[.,]\\d)?\\s?%"
+      ],
+      "exclude": [
+        "alcool sanitar",
+        "alcool izopropilic",
+        "alcool medicinal",
+        "alcomar",
+        "fara alcool",
+        "dezinfect",
+        "^set sticla",
+        "^pahar",
+        "^set (?:de )?pahare",
+        "^cana\\b",
+        "^halba",
+        "racitor",
+        "decantor",
+        "tirbuson",
+        "desfacator",
+        "dozator",
+        "frapiera",
+        "cutter",
+        "trabuc",
+        "sirop"
+      ]
+    },
+    {
+      "name": "Accesorii TV",
+      "patterns": [
+        "\\bsuport tv\\b"
+      ]
+    },
+    {
+      "name": "Console și jocuri video",
+      "patterns": [
+        "\\bplaystation\\b",
+        "\\bps[345]\\b",
+        "\\bxbox\\b",
+        "\\bnintendo\\b",
+        "\\bdualsense\\b",
+        "\\bgamepad\\b"
+      ]
+    },
+    {
+      "name": "Telefoane și tablete",
+      "patterns": [
+        "\\btelefon mobil\\b",
+        "\\bsmartphone\\b",
+        "\\biphone\\b",
+        "\\btableta\\b",
+        "\\bipad\\b"
+      ]
+    },
+    {
+      "name": "Auto și moto",
+      "patterns": [
+        "\\baditiv\\b",
+        "\\banvelop",
+        "\\bbec(?:uri)? auto\\b",
+        "\\bbecuri auto\\b",
+        "\\bbec(?:uri)? far",
+        "\\bsuport magnetic\\b.*\\bventilatie\\b",
+        "\\bcovo(?:r|are|rase|ras)\\b.*\\b(?:auto|portbagaj|tunel|mocheta)\\b",
+        "\\bcovor portbagaj\\b",
+        "\\bcotiera\\b",
+        "\\bulei motor\\b",
+        "\\bstergato(?:r|are)\\b",
+        "\\blichid (?:de )?parbriz\\b",
+        "\\bsolutie (?:pentru )?dezghet",
+        "\\bsolutie protejare\\b",
+        "\\bsolutie spalare diesel\\b",
+        "\\btrusa medicala auto\\b",
+        "\\bvesta reflectorizanta\\b",
+        "\\btriunghi",
+        "\\bkit (?:siguranta auto|reparatie parbriz)\\b",
+        "\\bplayer auto\\b",
+        "\\bdifuzoare auto\\b",
+        "\\bsubwoofer\\b",
+        "\\bamplificator\\b",
+        "\\bcar kit\\b",
+        "\\bmodulator fm\\b",
+        "\\bnavigatie\\b",
+        "\\binterfata obd\\b",
+        "\\btester auto\\b",
+        "\\bcabluri (?:groase )?de pornire\\b",
+        "\\bcapac plastic priza\\b",
+        "\\bnuca schimbator\\b",
+        "\\boglinda interioara\\b",
+        "\\blampa semnalizare\\b",
+        "\\bcapace roti\\b",
+        "\\bpresuri auto\\b",
+        "\\bscaune? auto\\b",
+        "\\bplacut[ae] numar\\b",
+        "\\bsuport placute numar\\b",
+        "\\bracleta pentru gheata\\b",
+        "\\bpachet dotare auto\\b",
+        "\\bsonax\\b",
+        "\\bliqui moly\\b",
+        "\\bbricheta\\b",
+        "\\bdash ?cam\\b",
+        "\\bcamera auto\\b",
+        "\\bdetailing\\b",
+        "\\bvalet pro\\b",
+        "\\bset covorase auto\\b",
+        "\\bfloor mats\\b",
+        "\\bparbriz\\b",
+        "\\bsuport telefon auto\\b"
+      ],
+      "exclude": [
+        "^covor spacer"
+      ]
+    },
+    {
+      "name": "Foto, video și supraveghere",
+      "patterns": [
+        "\\bgopro\\b",
+        "\\bcamera foto\\b",
+        "\\baparat foto\\b",
+        "\\bobiectiv\\b",
+        "\\bcamera de supraveghere\\b"
+      ]
+    },
+    {
+      "name": "Accesorii telefon",
+      "patterns": [
+        "\\bhusa\\b",
+        "\\bcarcasa\\b",
+        "\\bfolie pentru samsung\\b",
+        "\\bfolie (?:de )?protectie\\b",
+        "\\bincarcator\\b",
+        "\\bsuport telefon\\b",
+        "\\bcablu (?:de )?date\\b",
+        "\\bprotectie nano",
+        "\\bpower ?bank\\b"
+      ],
+      "exclude": [
+        "cd/dvd",
+        "anvelope"
+      ]
+    },
+    {
+      "name": "Calculatoare, periferice și rețea",
+      "patterns": [
+        "\\blaptop\\b",
+        "\\bnotebook\\b",
+        "\\bdesktop pc\\b",
+        "\\bsistem desktop\\b",
+        "\\bplaca video\\b",
+        "\\bprocesor\\b",
+        "\\bmemorie\\b",
+        "\\bsursa be quiet\\b",
+        "\\bsursa (?:pc|atx)\\b",
+        "\\bcard de memorie\\b",
+        "\\bssd\\b",
+        "\\bhdd\\b",
+        "\\badaptor (?:a\\+ )?(?:displayport|wireless)\\b",
+        "\\bdvd",
+        "\\bcd/dvd\\b",
+        "\\bcablu adaptor\\b",
+        "\\bmonitor\\b",
+        "\\bmouse\\b",
+        "\\btastatura\\b",
+        "\\bwebcam\\b",
+        "\\bimprimanta\\b",
+        "\\baer comprimat\\b",
+        "\\bcablu audio\\b",
+        "\\brouter\\b",
+        "\\bhard disk\\b",
+        "\\bstick (?:usb|de memorie)\\b",
+        "\\bplaca de baza\\b",
+        "\\bcooler\\b",
+        "\\bmousepad\\b",
+        "\\bkit gaming\\b",
+        "\\bswitch\\b.*\\bmbps\\b",
+        "\\bswitch (?:tp-link|mercusys)\\b",
+        "\\bcablu (?:f/)?utp\\b",
+        "\\bgeanta laptop\\b",
+        "\\brucsac laptop\\b",
+        "\\bventilator noctua\\b",
+        "\\bdisc drive\\b",
+        "^sursa\\b.*\\b\\d{3,4}\\s?w\\b"
+      ]
+    },
+    {
+      "name": "Audio (căști, boxe)",
+      "patterns": [
+        "\\bcasti\\b",
+        "\\bboxa\\b",
+        "\\bboxe\\b",
+        "\\bsoundbar\\b",
+        "\\bmicrofon\\b"
+      ]
+    },
+    {
+      "name": "Electrocasnice și aparate personale",
+      "patterns": [
+        "\\baspirato(?:r|are)",
+        "\\bblender\\b",
+        "\\bepilator\\b",
+        "\\bfier de calcat\\b",
+        "\\bmixer\\b",
+        "\\buscator de par\\b",
+        "\\bventilator\\b",
+        "\\bstorcator\\b",
+        "\\bcantar de bucatarie\\b",
+        "\\bgratar electric\\b",
+        "\\bair purifier\\b",
+        "\\baparat (?:electric )?de ras\\b",
+        "\\bshaver\\b",
+        "\\bfiltre? compatibile?\\b.*\\baspirato(?:r|are)",
+        "\\bdetinator\\b.*\\baspirato(?:r|are)",
+        "\\bsmartwatch\\b",
+        "^(?:frigider|combina frigorifica|congelator|lada frigorifica|masina de spalat (?:rufe|vase)|aragaz|cuptor|plita|hota|aer conditionat|friteuza|espressor|cafetiera|toaster|prajitor de paine|fierbator|robot de bucatarie|microunde|umidificator|purificator|dezumidificator|aeroterma|boiler|masina de tocat|multicooker|oala sub presiune|epilator|placa de par|perie electrica|trimmer|masina de tuns)\\b"
+      ],
+      "exclude": [
+        "unica folosinta"
+      ]
+    },
+    {
+      "name": "Sport și fitness",
+      "patterns": [
+        "\\bgantere?\\b",
+        "\\bbanda de alergare\\b",
+        "\\bsaltea fitness\\b",
+        "\\bminge\\b",
+        "\\bbicicleta\\b",
+        "\\btrotineta\\b",
+        "\\bracheta\\b",
+        "\\bbara fitness\\b",
+        "\\bbenzi elastice\\b",
+        "\\bcort\\b",
+        "\\bsac de dormit\\b"
+      ]
+    },
+    {
+      "name": "Încălțăminte",
+      "patterns": [
+        "\\bpantofi\\b",
+        "\\bghete\\b",
+        "\\bsandale\\b",
+        "\\bpapuci\\b",
+        "\\bcizme\\b",
+        "\\bbocanci\\b",
+        "\\bsneakers\\b",
+        "\\badidasi\\b",
+        "\\bsport shoes\\b",
+        "\\bshoes\\b"
+      ],
+      "exclude": [
+        "incaltator"
+      ]
+    },
+    {
+      "name": "Îmbrăcăminte și accesorii",
+      "patterns": [
+        "\\btricou\\b",
+        "\\bhanorac\\b",
+        "\\bpantaloni\\b",
+        "\\bbermude\\b",
+        "\\bjacheta\\b",
+        "\\bcaciula\\b",
+        "\\bgeanta\\b",
+        "\\bportofel\\b",
+        "\\brucsac\\b",
+        "\\bceas\\b",
+        "\\bochelari\\b",
+        "\\bbratara\\b",
+        "\\bcostum\\b",
+        "\\btee\\b",
+        "\\bt-shirts?\\b",
+        "\\bsosete\\b",
+        "\\bboxeri\\b",
+        "\\bsapca\\b",
+        "\\bgeaca\\b",
+        "\\bpulover\\b",
+        "\\bbluza\\b",
+        "\\bcamasa\\b",
+        "\\bfusta\\b",
+        "\\brochie\\b",
+        "\\bvesta\\b"
+      ],
+      "exclude": [
+        "reflectorizanta"
+      ]
+    },
+    {
+      "name": "Sănătate și suplimente",
+      "patterns": [
+        "\\bsupliment",
+        "\\bvitamina\\b",
+        "\\bvitamine\\b",
+        "\\bmagneziu\\b",
+        "\\bmelatonin",
+        "\\bomega\\b",
+        "\\bcolagen\\b",
+        "\\bberberina\\b",
+        "\\bashwagandha\\b",
+        "\\bbeta alanine\\b",
+        "\\bostrovit\\b",
+        "\\bcomprimate\\b",
+        "\\bcapsule\\b",
+        "\\btablete\\b"
+      ],
+      "exclude": [
+        "detergent",
+        "vase"
+      ]
+    },
+    {
+      "name": "Cosmetice și îngrijire personală",
+      "patterns": [
+        "\\bdeodorant\\b",
+        "\\bantiperspirant\\b",
+        "\\bsampon\\b",
+        "\\bgel de dus\\b",
+        "\\bcrema\\b",
+        "\\bapa de parfum\\b",
+        "\\bapa de toaleta\\b",
+        "\\bparfum\\b",
+        "\\bpasta de dinti\\b",
+        "\\bsapun\\b",
+        "\\blapte de corp\\b",
+        "\\bbalsam dupa ras\\b",
+        "\\baparate de ras de unica folosinta\\b",
+        "\\babsorbante\\b",
+        "\\blubrifiant\\b",
+        "\\bprezervative\\b",
+        "\\bpachet durex\\b",
+        "\\bprotectie solara\\b",
+        "\\bautobronzant\\b",
+        "\\bdupa plaja\\b",
+        "\\bservetele faciale\\b",
+        "\\blotiune anti-intepaturi\\b",
+        "\\bmasca de dormit\\b",
+        "\\bdopuri urechi\\b",
+        "\\bpentru corp\\b"
+      ]
+    },
+    {
+      "name": "Alimente și băuturi (fără alcool)",
+      "patterns": [
+        "\\bcafea\\b",
+        "\\bsirop\\b",
+        "\\bceai\\b",
+        "\\bciocolata\\b",
+        "\\bbiscuiti\\b",
+        "\\bsuc\\b",
+        "\\bapa minerala\\b",
+        "\\bnapolitane\\b",
+        "\\benergizant\\b",
+        "\\bbaton proteic\\b",
+        "\\bpaste (?:fainoase|integrale)\\b",
+        "\\bule(?:i|iul) de masline\\b",
+        "\\bmiere\\b",
+        "\\bsnacks?\\b",
+        "\\bbomboane\\b",
+        "\\bcereale\\b",
+        "\\borez\\b",
+        "\\bnuci\\b",
+        "\\bmigdale\\b"
+      ]
+    },
+    {
+      "name": "Bebeluși și copii",
+      "patterns": [
+        "\\bscutece\\b",
+        "\\bbiberon\\b",
+        "\\blapte praf\\b",
+        "\\bbebelusi\\b"
+      ]
+    },
+    {
+      "name": "Curățenie și menaj",
+      "patterns": [
+        "\\bbalsam (?:de |pentru )?rufe\\b",
+        "\\bbalsam rufe\\b",
+        "\\bdetergent\\b",
+        "\\bdezinfectant\\b",
+        "\\balcool sanitar\\b",
+        "\\bodorizant\\b",
+        "\\bsaci menajeri\\b",
+        "\\bhartie igienica\\b",
+        "\\bprosoape de hartie\\b",
+        "\\bbureti\\b",
+        "\\bburete\\b",
+        "\\bperle parfumate\\b",
+        "\\bpudra pentru igi",
+        "\\blaveta\\b",
+        "\\bcuratitor geam\\b",
+        "\\bpachet balsam\\b",
+        "\\bset de curatenie\\b",
+        "\\bpachet promo detergent\\b",
+        "\\bpachet prosoape de hartie\\b",
+        "\\bsolutie (?:pentru )?curat"
+      ]
+    },
+    {
+      "name": "Animale de companie",
+      "patterns": [
+        "\\bpisici\\b",
+        "\\bcaini\\b",
+        "\\banimale\\b"
+      ]
+    },
+    {
+      "name": "Cărți, jocuri și jucării",
+      "patterns": [
+        "\\bjoc\\b",
+        "\\bjoc de societate\\b",
+        "\\bpapusa\\b",
+        "\\bpuzzle\\b",
+        "\\blego\\b",
+        "\\(vol\\b",
+        "\\bcutie cadou\\b"
+      ]
+    },
+    {
+      "name": "Casă, grădină și bricolaj",
+      "patterns": [
+        "\\bbanda dublu adeziva\\b",
+        "\\bdulap\\b",
+        "\\braft\\b",
+        "\\bgratar\\b",
+        "\\bscaun\\b",
+        "\\bprosop\\b",
+        "\\bprosoape\\b",
+        "\\bcap de dus\\b",
+        "\\bfiltru (?:de )?apa\\b",
+        "\\bcana filtranta\\b",
+        "\\bcartuse?\\b",
+        "\\bmojar\\b",
+        "\\bhartie pentru copt\\b",
+        "\\bfolie\\b",
+        "\\bincaltator\\b",
+        "\\bset ustensile\\b",
+        "\\brigla\\b",
+        "\\bfir textil\\b",
+        "\\bcreioane\\b",
+        "\\bbecuri led\\b",
+        "\\bbec led\\b",
+        "\\bprelungito(?:r|are)\\b",
+        "\\bpriza\\b",
+        "\\buscator de rufe\\b",
+        "\\bcovor\\b",
+        "\\bset sticla\\b",
+        "\\bperii\\b",
+        "\\bradiator\\b",
+        "\\bcutter\\b",
+        "\\bbaterii\\b",
+        "\\btermostat\\b",
+        "\\bbormasina\\b",
+        "\\bmasina de gaurit\\b"
+      ]
+    }
+  ]
+}

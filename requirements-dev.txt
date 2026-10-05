@@ -1,0 +1,11 @@
+# -*- coding: utf-8 -*-
+# Pentru cine dezvoltă sau rulează testele (pytest). Include tot ce e în requirements.txt.
+# Instalare: .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+# Versiunile sunt fixate (din pip freeze); colorama e cerută de pytest doar pe Windows.
+-r requirements.txt
+pytest==9.0.3
+iniconfig==2.3.0
+packaging==26.3
+pluggy==1.6.0
+Pygments==2.21.0
+colorama==0.4.6; sys_platform == "win32"

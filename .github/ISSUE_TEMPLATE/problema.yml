@@ -1,0 +1,119 @@
+name: Problemă sau eroare
+description: Programul a dat o eroare, a arătat o cifră greșită sau nu pornește.
+title: "[Problemă] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Atenție: acest Issue este public
+
+        **NU atașa și NU lipi aici:** `comenzi.json`, `analiza.json`, `retururi.json`, nimic din folderele `iesiri/`, `logs/` sau `.profil_browser/`, și nici capturi de ecran cu nume, adresă, telefon, e-mail sau comenzi reale. Conțin istoricul tău de cumpărături.
+
+        Dacă ai nevoie să arăți un caz, înlocuiește datele reale cu unele inventate (de exemplu `XXXX` în loc de numărul comenzii).
+
+        **O problemă de securitate NU se descrie aici.** Vezi [SECURITY.md](https://github.com/poprobert0412/cheltuieli-emag/blob/main/SECURITY.md).
+
+        Înainte de a trimite, verifică [întrebările frecvente](https://github.com/poprobert0412/cheltuieli-emag#întrebări-frecvente) și [tabelul de probleme frecvente](https://github.com/poprobert0412/cheltuieli-emag/blob/main/docs/INSTALARE.md#probleme-frecvente).
+
+  - type: textarea
+    id: pasi
+    attributes:
+      label: Ce ai făcut?
+      description: Pașii, în ordine, de la dublu-click pe lansator până la problemă.
+      placeholder: "1. Am dat dublu-click pe porneste.bat. 2. Am apăsat «Pornește analiza». 3. M-am logat. 4. ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: rezultat
+    attributes:
+      label: Ce ai văzut?
+      description: Ce s-a întâmplat și ce te așteptai să se întâmple. Dacă e o cifră greșită, spune care și cu ce o compari (fără sume sau comenzi reale, dacă nu e nevoie).
+    validations:
+      required: true
+
+  - type: dropdown
+    id: lansare
+    attributes:
+      label: Cum ai pornit programul?
+      options:
+        - porneste.bat (aplicația locală)
+        - login.bat și apoi ruleaza.bat
+        - demo.bat sau „Încearcă cu date inventate”
+        - Din terminal (ruleaza.py)
+        - Altfel
+    validations:
+      required: true
+
+  - type: dropdown
+    id: demo
+    attributes:
+      label: A mers demonstrația cu date inventate (demo.bat)?
+      description: Ne ajută să aflăm dacă problema e la instalare sau la citirea contului.
+      options:
+        - Da, a mers
+        - Nu, dă aceeași problemă
+        - Nu am încercat
+    validations:
+      required: true
+
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Sistemul de operare
+      options:
+        - Windows 11
+        - Windows 10
+        - Mac sau Linux
+        - Altul
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Versiunea de Python
+      description: Într-un Command Prompt scrie `python --version`.
+      placeholder: "ex. 3.13.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browserul folosit de program
+      options:
+        - Edge (implicit)
+        - Chrome (cu EMAG_BROWSER_CHANNEL=chrome)
+        - Altul
+    validations:
+      required: true
+
+  - type: input
+    id: versiune
+    attributes:
+      label: Versiunea programului
+      description: Data la care ai descărcat ZIP-ul sau, dacă folosești git, rezultatul comenzii `git log -1 --format=%h`.
+      placeholder: "ex. descărcat pe 5 octombrie 2026"
+    validations:
+      required: false
+
+  - type: textarea
+    id: eroare
+    attributes:
+      label: Mesajul de eroare (fără date personale)
+      description: Copiază doar mesajul din fereastra neagră, de la «EROARE» în jos. Înlocuiește numerele de comandă, numele și căile care conțin numele contului tău Windows cu `XXXX`. Nu lipi aici fișiere din `logs/`.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmare
+    attributes:
+      label: Confirmări
+      options:
+        - label: Am verificat că textul de mai sus nu conține date personale (nume, adresă, telefon, e-mail, numere de comandă reale, numele contului Windows).
+          required: true
+        - label: Nu am atașat `comenzi.json`, `retururi.json`, `analiza.json`, fișiere din `iesiri/` sau `logs/`, nici capturi cu comenzi reale.
+          required: true

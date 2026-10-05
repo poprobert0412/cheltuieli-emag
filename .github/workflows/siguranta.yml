@@ -1,0 +1,38 @@
+# Caută vulnerabilități cunoscute în dependențele fixate (requirements.txt = ce instalează utilizatorii,
+# requirements-dev.txt = uneltele de test). Se rulează la push, la pull request și săptămânal, pentru că
+# o vulnerabilitate poate fi publicată oricând după ce versiunea a fost aleasă.
+# Fără secrete: workflow-ul nu primește niciunul și are drepturi doar de citire.
+name: Siguranța dependențelor
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "29 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pip-audit:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Descarcă codul
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # no-deps: toate pachetele sunt fixate în fișiere, deci nu se rezolvă nimic nou și nu se instalează nimic de pe internet;
+      # dacă cineva scrie o dependență nefixată, acțiunea pică în loc să verifice o versiune la nimereală.
+      - name: Caută vulnerabilități cu pip-audit
+        uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
+        with:
+          inputs: requirements.txt requirements-dev.txt
+          no-deps: true

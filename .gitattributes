@@ -1,0 +1,12 @@
+# Sfârșituri de rând: lansatoarele Windows au nevoie de CRLF, restul de LF (același text pe orice sistem).
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+# Imaginile (capturile din docs/img) sunt binare: git nu le atinge sfârșiturile de rând și nu le compară ca text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary

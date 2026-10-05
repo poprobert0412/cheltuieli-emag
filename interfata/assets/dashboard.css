@@ -1,0 +1,496 @@
+/* =============================================================================
+   dashboard.css — designul raportului „Cheltuieli eMAG” (sursa unică).
+   Ce face: stilează componenta din dashboard.js. Același fișier e lipit inline în
+   raportul generat de Python și încărcat de site-ul din interfata/.
+   Ce primește: nimic. Gazda poate seta data-theme="light|dark" pe <html>; fără el,
+   tema urmează sistemul (prefers-color-scheme).
+   Ce NU face: nu stilează pagina gazdă. TOATE regulile sunt sub .emag-dash și toate
+   clasele au prefixul ed-, ca două instanțe sau o pagină gazdă să nu se calce.
+   Paleta seriilor e cea validată (dataviz): 7 serii categorice, lumină + întuneric.
+   Layout-ul răspunde la lățimea componentei (container queries), nu la a ferestrei,
+   fiindcă site-ul o pune într-un cadru mai îngust decât pagina: sub 960 px tabelele
+   lungi devin liste de carduri, ca valoarea și starea să nu cadă în afara ecranului.
+   Respectă contrastul forțat (Windows high contrast): vezi blocul forced-colors.
+   ============================================================================= */
+
+/* ---------- tokeni: lumină ---------- */
+.emag-dash {
+  color-scheme: light;
+  --ed-page: #f9f9f7;
+  --ed-surface: #fcfcfb;
+  --ed-ink: #0b0b0b;
+  --ed-ink-2: #52514e;
+  --ed-muted: #6a6862;
+  --ed-grid: #e1e0d9;
+  --ed-axis: #b4b3a8;
+  --ed-border: rgba(11, 11, 11, 0.12);
+  --ed-border-strong: rgba(11, 11, 11, 0.50); /* conturul butoanelor: >= 3:1 pe fundal (WCAG 1.4.11) */
+  --ed-ghost: rgba(11, 11, 11, 0.05);
+  --ed-ghost-2: rgba(11, 11, 11, 0.10);
+  --ed-s1: #2a78d6; --ed-s2: #eb6834; --ed-s3: #1baf7a; --ed-s4: #eda100;
+  --ed-s5: #e87ba4; --ed-s6: #008300; --ed-s7: #4a3aa7;
+  --ed-other: #a8a69d;
+  --ed-kept: var(--ed-s1);
+  --ed-returned: var(--ed-s2);
+  --ed-cancelled: #a8a69d;
+  --ed-pending: var(--ed-s3);
+  --ed-unknown: var(--ed-s4);
+  --ed-focus: #1d63b8;
+  --ed-link: #0b57a8;       /* linkurile spre eMAG: >= 6,7:1 pe fundal și pe suprafață (WCAG AA text) */
+  --ed-danger: #b3261e;
+  --ed-note-bg: #fdf3d2;
+  --ed-note-ink: #5a4200;
+  --ed-note-border: #d9b542;
+  --ed-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+
+  /* nu depind de temă; gazda le poate suprascrie cu .gazda .emag-dash { … } */
+  --ed-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ed-font-num: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  --ed-gap: 44px;
+  --ed-pad-top: 28px;
+  --ed-pad-bottom: 64px;
+  --ed-scroll-margin: 16px; /* cât loc rămâne în jurul unui element focusat, ca inelul de focus să nu fie tăiat de marginea ecranului */
+  --ed-target: 40px;        /* înălțimea minimă a controalelor (butoane, filtre, rezumate), din brief */
+}
+
+/* ---------- tokeni: întuneric (automat, dacă gazda nu a forțat lumina) ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .emag-dash {
+    color-scheme: dark;
+    --ed-page: #0d0d0d;
+    --ed-surface: #1a1a19;
+    --ed-ink: #ffffff;
+    --ed-ink-2: #c3c2b7;
+    --ed-muted: #a09e96;
+    --ed-grid: #2c2c2a;
+    --ed-axis: #4a4a46;
+    --ed-border: rgba(255, 255, 255, 0.12);
+    --ed-border-strong: rgba(255, 255, 255, 0.45);
+    --ed-ghost: rgba(255, 255, 255, 0.07);
+    --ed-ghost-2: rgba(255, 255, 255, 0.13);
+    --ed-s1: #3987e5; --ed-s2: #d95926; --ed-s3: #199e70; --ed-s4: #c98500;
+    --ed-s5: #d55181; --ed-s6: #008300; --ed-s7: #9085e9;
+    --ed-other: #6b6a63;
+    --ed-cancelled: #6b6a63;
+    --ed-focus: #6aa7f0;
+    --ed-link: #7db4f5;
+    --ed-danger: #ff8a80;
+    --ed-note-bg: #2a2210;
+    --ed-note-ink: #f1d58a;
+    --ed-note-border: #6b5518;
+    --ed-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ---------- tokeni: întuneric forțat de gazdă ---------- */
+:root[data-theme="dark"] .emag-dash {
+  color-scheme: dark;
+  --ed-page: #0d0d0d;
+  --ed-surface: #1a1a19;
+  --ed-ink: #ffffff;
+  --ed-ink-2: #c3c2b7;
+  --ed-muted: #a09e96;
+  --ed-grid: #2c2c2a;
+  --ed-axis: #4a4a46;
+  --ed-border: rgba(255, 255, 255, 0.12);
+  --ed-border-strong: rgba(255, 255, 255, 0.45);
+  --ed-ghost: rgba(255, 255, 255, 0.07);
+  --ed-ghost-2: rgba(255, 255, 255, 0.13);
+  --ed-s1: #3987e5; --ed-s2: #d95926; --ed-s3: #199e70; --ed-s4: #c98500;
+  --ed-s5: #d55181; --ed-s6: #008300; --ed-s7: #9085e9;
+  --ed-other: #6b6a63;
+  --ed-cancelled: #6b6a63;
+  --ed-focus: #6aa7f0;
+  --ed-link: #7db4f5;
+  --ed-danger: #ff8a80;
+  --ed-note-bg: #2a2210;
+  --ed-note-ink: #f1d58a;
+  --ed-note-border: #6b5518;
+  --ed-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- bază (scopată) ---------- */
+.emag-dash {
+  display: block;
+  background: var(--ed-page);
+  color: var(--ed-ink);
+  font: 14px/1.5 var(--ed-font);
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+  overflow-wrap: break-word;
+  -webkit-tap-highlight-color: transparent;
+}
+.emag-dash *,
+.emag-dash *::before,
+.emag-dash *::after { box-sizing: border-box; }
+.emag-dash [hidden] { display: none !important; }
+.emag-dash h1, .emag-dash h2, .emag-dash h3, .emag-dash h4, .emag-dash p, .emag-dash ul, .emag-dash dl, .emag-dash dd { margin: 0; }
+.emag-dash ul { padding: 0; list-style: none; }
+.emag-dash button { font: inherit; color: inherit; touch-action: manipulation; }
+.emag-dash code { white-space: nowrap; font-family: var(--ed-font-num); font-size: 0.92em; background: var(--ed-ghost); border-radius: 4px; padding: 1px 5px; }
+.emag-dash :focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 2px; }
+/* La focus de la tastatură browserul derulează elementul „cât să se vadă”, adică lipit de marginea ecranului,
+   iar inelul de focus (2 px + decalaj) iese în afară și se taie. Marginea de derulare îl lasă întreg. */
+.emag-dash .ed-tbl-wrap,
+.emag-dash .ed-chart-scroll,
+.emag-dash .ed-bar-row,
+.emag-dash .ed-funnel-seg,
+.emag-dash .ed-toggle,
+.emag-dash .ed-chip,
+.emag-dash .ed-more,
+.emag-dash summary { scroll-margin-block: var(--ed-scroll-margin); }
+
+.emag-dash .ed-sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
+/* ---------- bannere: demo și eroare ---------- */
+.emag-dash .ed-banner {
+  background: var(--ed-note-bg); color: var(--ed-note-ink); border-bottom: 1px solid var(--ed-note-border);
+  padding: 10px 16px; text-align: center; font-weight: 600; font-size: 13px; text-wrap: balance;
+}
+.emag-dash .ed-error { border-color: var(--ed-danger); display: grid; gap: 10px; }
+.emag-dash .ed-error .ed-h { color: var(--ed-danger); }
+.emag-dash .ed-error-list { display: grid; gap: 4px; padding-left: 18px; list-style: disc; color: var(--ed-ink-2); }
+.emag-dash .ed-hint { color: var(--ed-ink-2); max-width: 70ch; text-wrap: pretty; }
+
+/* ---------- structură ---------- */
+.emag-dash .ed-wrap {
+  container-type: inline-size;
+  container-name: ed;
+  max-width: 1080px;
+  margin-inline: auto;
+  padding: var(--ed-pad-top) 16px var(--ed-pad-bottom);
+  display: grid;
+  gap: var(--ed-gap);
+}
+.emag-dash .ed-block { display: grid; gap: 14px; min-width: 0; scroll-margin-top: var(--ed-scroll-margin); }
+.emag-dash .ed-block:focus-visible { outline-offset: 6px; border-radius: 6px; }
+.emag-dash .ed-h { font-size: 17px; font-weight: 650; line-height: 1.3; text-wrap: balance; }
+.emag-dash .ed-h-sub { font-size: 14px; font-weight: 650; }
+.emag-dash .ed-sec-head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; justify-content: space-between; }
+.emag-dash .ed-caption { color: var(--ed-ink-2); font-size: 13px; max-width: 72ch; text-wrap: pretty; }
+.emag-dash .ed-note { color: var(--ed-ink-2); }
+.emag-dash .ed-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ed-muted); font-weight: 600; }
+.emag-dash .ed-stack { display: grid; gap: 14px; min-width: 0; }
+.emag-dash .ed-after-summary { margin-top: 10px; }
+.emag-dash .ed-card { background: var(--ed-surface); border: 1px solid var(--ed-border); border-radius: 10px; padding: 20px; min-width: 0; }
+
+/* ---------- hero ---------- */
+.emag-dash .ed-hero { display: grid; gap: 10px; align-content: start; }
+.emag-dash .ed-eyebrow { font-size: 12px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ed-muted); font-weight: 650; }
+.emag-dash .ed-amount {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 0;
+  font-family: var(--ed-font-num); font-variant-numeric: tabular-nums; letter-spacing: -0.03em;
+}
+.emag-dash .ed-big { font-size: clamp(40px, 8vw, 64px); font-size: clamp(40px, 11cqi, 68px); font-weight: 700; line-height: 1.05; }
+.emag-dash .ed-cents { margin-left: 1px; font-size: clamp(20px, 3.4vw, 28px); font-size: clamp(20px, 4.6cqi, 30px); font-weight: 600; color: var(--ed-ink-2); }
+.emag-dash .ed-lead { color: var(--ed-ink); font-size: 15px; max-width: 70ch; text-wrap: pretty; }
+.emag-dash .ed-meta-line { color: var(--ed-muted); font-size: 12.5px; }
+.emag-dash .ed-hero-warn { color: var(--ed-note-ink); background: var(--ed-note-bg); border: 1px solid var(--ed-note-border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+
+/* ---------- lanț comandat -> păstrat ---------- */
+.emag-dash .ed-funnel-bar { display: flex; height: 24px; gap: 2px; border-radius: 6px; overflow: hidden; background: var(--ed-ghost); }
+.emag-dash .ed-funnel-seg { min-width: 2px; touch-action: manipulation; }
+.emag-dash .ed-funnel-seg:hover { filter: brightness(1.12); }
+.emag-dash .ed-funnel-seg:focus-visible { outline-offset: -3px; }
+.emag-dash .ed-funnel-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr)); gap: 12px 20px; }
+.emag-dash .ed-fl-item { display: grid; gap: 2px; border-top: 1px solid var(--ed-border); padding-top: 8px; min-width: 0; align-content: start; }
+.emag-dash .ed-fl-name { display: flex; align-items: center; gap: 8px; color: var(--ed-ink-2); font-size: 13px; }
+.emag-dash .ed-fl-val { font-family: var(--ed-font-num); font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.emag-dash .ed-fl-meta { font-size: 12px; color: var(--ed-muted); }
+.emag-dash .ed-fl-final { border-top: 2px solid var(--ed-ink); }
+.emag-dash .ed-sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+.emag-dash .ed-sw-ring { background: transparent !important; box-shadow: inset 0 0 0 2px var(--ed-axis); }
+
+/* ---------- tile-uri ---------- */
+.emag-dash .ed-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.emag-dash .ed-tile { background: var(--ed-surface); border: 1px solid var(--ed-border); border-radius: 10px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.emag-dash .ed-tile-num { font-family: var(--ed-font-num); font-size: 24px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.emag-dash .ed-tile-desc { font-size: 12.5px; color: var(--ed-ink-2); }
+
+/* ---------- bare (categorii, vânzători) ---------- */
+.emag-dash .ed-bars { display: grid; gap: 4px; }
+.emag-dash .ed-bar-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px 12px;
+  padding: 6px 8px; border-radius: 6px; touch-action: manipulation;
+}
+.emag-dash .ed-bar-row:hover { background: var(--ed-ghost); }
+.emag-dash .ed-bar-row:focus-visible { background: var(--ed-ghost); outline-offset: -2px; }
+.emag-dash .ed-bar-name { font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.emag-dash .ed-bar-val { font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; min-width: 0; }
+.emag-dash .ed-bar-val strong { font-weight: 650; }
+.emag-dash .ed-pct { color: var(--ed-muted); }
+.emag-dash .ed-bar-track { grid-column: 1 / -1; display: block; height: 16px; border-radius: 0 4px 4px 0; min-width: 0; }
+.emag-dash .ed-bar-fill { display: block; height: 100%; background: var(--ed-s1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.emag-dash .ed-bar-row:hover .ed-bar-fill,
+.emag-dash .ed-bar-row:focus-visible .ed-bar-fill { filter: brightness(1.12); }
+
+/* ---------- tabele ---------- */
+.emag-dash .ed-tbl-wrap { overflow-x: auto; border: 1px solid var(--ed-border); border-radius: 8px; background: var(--ed-surface); max-width: 100%; }
+.emag-dash .ed-tbl-wrap:focus-visible { outline-offset: 0; }
+.emag-dash .ed-card .ed-tbl-wrap { border: 0; border-radius: 0; }
+.emag-dash .ed-hl .ed-tbl-wrap { border: 1px solid var(--ed-border); border-radius: 8px; }
+/* Sombre la margine când mai e de derulat (tabele și grafic): se văd pe mobil, fără JavaScript. */
+.emag-dash .ed-tbl-wrap,
+.emag-dash .ed-chart-scroll {
+  background:
+    linear-gradient(to right, var(--ed-surface) 30%, transparent) left center / 28px 100% no-repeat local,
+    linear-gradient(to left, var(--ed-surface) 30%, transparent) right center / 28px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--ed-border-strong), transparent) left center / 10px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--ed-border-strong), transparent) right center / 10px 100% no-repeat scroll,
+    var(--ed-surface);
+}
+.emag-dash table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.emag-dash th, .emag-dash td { padding: 7px 12px; text-align: left; border-bottom: 1px solid var(--ed-grid); vertical-align: top; }
+.emag-dash th { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ed-muted); font-weight: 600; white-space: nowrap; }
+.emag-dash tbody tr:hover td { background: var(--ed-ghost); }
+.emag-dash tbody tr:last-child td { border-bottom: 0; }
+.emag-dash td.ed-num, .emag-dash th.ed-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.emag-dash td.ed-name { min-width: 220px; overflow-wrap: anywhere; }
+.emag-dash td.ed-nowrap { white-space: nowrap; }
+.emag-dash tfoot td { font-weight: 650; border-top: 1px solid var(--ed-axis); border-bottom: 0; }
+.emag-dash .ed-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+.emag-dash .ed-pill .ed-sw { width: 8px; height: 8px; border-radius: 50%; }
+
+.emag-dash .ed-toggle,
+.emag-dash .ed-chip,
+.emag-dash .ed-more {
+  border: 1px solid var(--ed-border-strong); background: var(--ed-surface); color: var(--ed-ink-2);
+  cursor: pointer; font-size: 12.5px; line-height: 1.2; min-height: var(--ed-target); touch-action: manipulation;
+}
+.emag-dash .ed-toggle { border-radius: 6px; padding: 5px 12px; }
+.emag-dash .ed-chip { border-radius: 999px; padding: 6px 14px; }
+.emag-dash .ed-more { border-radius: 6px; padding: 7px 14px; justify-self: start; }
+.emag-dash .ed-toggle:hover,
+.emag-dash .ed-chip:hover,
+.emag-dash .ed-more:hover { background: var(--ed-ghost-2); color: var(--ed-ink); border-color: var(--ed-ink-2); }
+.emag-dash .ed-toggle:active,
+.emag-dash .ed-chip:active,
+.emag-dash .ed-more:active { background: var(--ed-ghost-2); }
+.emag-dash .ed-toggle[aria-pressed="true"] { background: var(--ed-ghost-2); color: var(--ed-ink); border-color: var(--ed-ink-2); box-shadow: inset 0 -2px 0 var(--ed-ink); }
+.emag-dash .ed-chip[aria-pressed="true"] { background: var(--ed-ink); color: var(--ed-surface); border-color: var(--ed-ink); }
+.emag-dash .ed-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- evidențiate ---------- */
+.emag-dash .ed-hl-grid { display: grid; gap: 16px; }
+.emag-dash .ed-hl { display: grid; gap: 14px; align-content: start; }
+.emag-dash .ed-hl .ed-tbl-wrap { max-height: 420px; overflow-y: auto; }
+.emag-dash .ed-hl thead th { position: sticky; top: 0; z-index: 1; background: var(--ed-surface); }
+.emag-dash .ed-hl-num { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.emag-dash .ed-hl-v { font-family: var(--ed-font-num); font-size: 30px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.emag-dash .ed-hl-u { color: var(--ed-ink-2); }
+.emag-dash .ed-hl-meta { font-size: 12.5px; color: var(--ed-muted); }
+
+/* ---------- grafic pe ani ---------- */
+.emag-dash .ed-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--ed-ink-2); margin-bottom: 8px; }
+.emag-dash .ed-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.emag-dash .ed-chart-scroll { overflow-x: auto; max-width: 100%; }
+.emag-dash .ed-chart-scroll:focus-visible { outline-offset: 0; }
+.emag-dash svg.ed-chart { display: block; max-width: none; height: auto; }
+.emag-dash svg.ed-chart text { fill: var(--ed-muted); font: 11px var(--ed-font); font-variant-numeric: tabular-nums; }
+.emag-dash svg.ed-chart .ed-total { fill: var(--ed-ink-2); font-weight: 600; }
+.emag-dash svg.ed-chart .ed-grid-line { stroke: var(--ed-grid); stroke-width: 1; }
+.emag-dash svg.ed-chart .ed-axis-line { stroke: var(--ed-axis); stroke-width: 1; }
+.emag-dash svg.ed-chart .ed-hit { fill: transparent; touch-action: manipulation; }
+.emag-dash svg.ed-chart .ed-hit:hover { fill: var(--ed-ghost); }
+.emag-dash svg.ed-chart .ed-hit:focus-visible { outline: none; fill: var(--ed-ghost-2); stroke: var(--ed-focus); stroke-width: 2; }
+
+/* ---------- control, avertismente, metodă ---------- */
+.emag-dash .ed-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 0 32px; }
+.emag-dash .ed-kv > div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--ed-grid); min-width: 0; }
+.emag-dash .ed-kv dt { color: var(--ed-ink-2); min-width: 0; }
+.emag-dash .ed-kv dd { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.emag-dash .ed-kv dd.ed-long { white-space: normal; min-width: 0; overflow-wrap: anywhere; }
+.emag-dash details { color: var(--ed-ink-2); }
+.emag-dash summary { cursor: pointer; color: var(--ed-ink-2); min-height: var(--ed-target); padding: 9px 0; touch-action: manipulation; }
+.emag-dash summary:hover { color: var(--ed-ink); }
+.emag-dash details[open] > summary { color: var(--ed-ink); }
+.emag-dash details ul { margin-top: 10px; padding-left: 18px; display: grid; gap: 4px; list-style: disc; font-size: 13px; }
+.emag-dash details .ed-tbl-wrap { margin-top: 10px; }
+.emag-dash .ed-status { display: flex; gap: 8px; align-items: center; color: var(--ed-ink-2); }
+.emag-dash .ed-status .ed-sw { background: var(--ed-s3); border-radius: 50%; }
+.emag-dash .ed-details-stack { display: grid; gap: 10px; }
+.emag-dash .ed-method { display: grid; gap: 8px; font-size: 13px; color: var(--ed-ink-2); max-width: 78ch; }
+.emag-dash .ed-method p { text-wrap: pretty; }
+.emag-dash .ed-method strong { color: var(--ed-ink); font-weight: 650; }
+
+/* ---------- linkuri spre eMAG (număr de comandă sau de retur) ----------
+   Vizibile permanent (subliniate, cu săgeată): pe telefon nu există hover. Zona de atingere are cel puțin 24 x 24 px
+   (WCAG 2.5.8) chiar și pentru un număr scurt; focusul vine din regula :focus-visible de mai sus. */
+.emag-dash .ed-olink {
+  display: inline-flex; align-items: center; gap: 4px; min-width: 24px; min-height: 24px; padding: 2px 4px; margin-inline: -4px;
+  color: var(--ed-link); white-space: nowrap; font-variant-numeric: tabular-nums;
+  text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; border-radius: 4px; touch-action: manipulation;
+}
+.emag-dash .ed-olink:hover { text-decoration-thickness: 2px; background: var(--ed-ghost-2); }
+.emag-dash .ed-ext { flex: none; font-size: 0.9em; line-height: 1; text-decoration: none; }
+.emag-dash .ed-links { display: flex; flex-wrap: wrap; gap: 0 14px; }
+.emag-dash .ed-orderline { display: block; }
+.emag-dash .ed-sub { display: block; color: var(--ed-muted); font-size: 12px; font-weight: 400; }
+
+/* ---------- avertismente pe grupe (details) ---------- */
+.emag-dash .ed-wgroups { display: grid; gap: 10px; }
+.emag-dash .ed-wgroups > .ed-caption { margin-top: -6px; }
+.emag-dash .ed-wg { background: var(--ed-surface); border: 1px solid var(--ed-border); border-radius: 10px; min-width: 0; }
+.emag-dash .ed-wg[data-affects="true"] { border-color: var(--ed-note-border); }
+.emag-dash .ed-wg > summary { padding: 10px 16px; }
+.emag-dash .ed-wg[open] > summary { border-bottom: 1px solid var(--ed-grid); }
+.emag-dash .ed-wg-title { color: var(--ed-ink); font-weight: 650; overflow-wrap: anywhere; }
+.emag-dash .ed-wg-meta { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 2px; font-size: 12.5px; color: var(--ed-ink-2); }
+.emag-dash .ed-wg-aff { font-weight: 600; }
+.emag-dash .ed-wg[data-affects="true"] .ed-wg-aff {
+  background: var(--ed-note-bg); color: var(--ed-note-ink); border: 1px solid var(--ed-note-border); border-radius: 999px; padding: 0 8px;
+}
+.emag-dash .ed-wg-body { display: grid; gap: 10px; padding: 12px 16px 16px; min-width: 0; }
+.emag-dash .ed-wg-text { font-size: 13px; color: var(--ed-ink-2); max-width: 72ch; text-wrap: pretty; }
+.emag-dash .ed-wg-text strong { color: var(--ed-ink); font-weight: 650; }
+.emag-dash .ed-wg .ed-tbl-wrap { margin-top: 0; }
+
+/* ---------- prețuri la același produs ---------- */
+.emag-dash .ed-tools { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; }
+.emag-dash .ed-field { display: grid; gap: 4px; flex: 1 1 220px; max-width: 380px; min-width: 0; }
+.emag-dash .ed-field-label { font-size: 12px; font-weight: 600; color: var(--ed-ink-2); }
+/* select-ul are fundal și culoare explicite (altfel în modul întunecat din Windows rămâne alb pe alb) */
+.emag-dash .ed-input {
+  width: 100%; min-width: 0; min-height: var(--ed-target); padding: 6px 10px; font: inherit; font-size: 13px;
+  background-color: var(--ed-surface); color: var(--ed-ink); border: 1px solid var(--ed-border-strong); border-radius: 6px;
+}
+.emag-dash .ed-input::placeholder { color: var(--ed-muted); opacity: 1; }
+.emag-dash .ed-tbl-prices th { white-space: normal; }
+.emag-dash .ed-tbl-prices td.ed-name { min-width: 200px; }
+.emag-dash .ed-tbl-prices td.ed-name .ed-sub { margin-left: calc(1em + 8px); } /* categoria sub numele, aliniată cu textul (după săgeată) */
+.emag-dash .ed-tiles-4 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); } /* 4 cifre-cheie pe un rând când încap */
+.emag-dash .ed-ph-open {
+  display: flex; align-items: flex-start; gap: 8px; width: 100%; min-height: var(--ed-target); padding: 6px 0; text-align: left;
+  background: none; border: 0; color: var(--ed-ink); font-weight: 600; cursor: pointer; border-radius: 6px; scroll-margin-block: var(--ed-scroll-margin);
+}
+.emag-dash .ed-ph-open:hover .ed-pname { text-decoration: underline; }
+.emag-dash .ed-chev { flex: none; width: 1em; font-size: 12px; line-height: 1.7; color: var(--ed-muted); }
+.emag-dash .ed-pname { min-width: 0; overflow-wrap: anywhere; }
+.emag-dash .ed-delta { display: block; font-weight: 600; }
+.emag-dash .ed-arrow { font-size: 10px; color: var(--ed-muted); }
+.emag-dash .ed-ph-detail td.ed-ph-cell { background: var(--ed-ghost); }
+.emag-dash .ed-ph-inner { display: grid; gap: 10px; min-width: 0; padding: 6px 0 10px; }
+.emag-dash .ed-ph-inner table { background: var(--ed-surface); }
+.emag-dash .ed-ph-limits { font-size: 13px; max-width: 78ch; text-wrap: pretty; }
+/* micro-diagrama: culoarea vine din `color` (currentColor), ca să urmeze și contrastul forțat; minimul e inel, ultimul preț e punct plin */
+.emag-dash svg.ed-spark { display: block; width: 96px; height: 28px; max-width: none; color: var(--ed-ink-2); overflow: visible; }
+.emag-dash .ed-spark-line { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.emag-dash .ed-spark-dot, .emag-dash .ed-spark-last { fill: currentColor; }
+.emag-dash .ed-spark-min { fill: none; stroke: currentColor; stroke-width: 1.5; }
+
+/* ---------- tooltip și zona live ---------- */
+.emag-dash .ed-tip {
+  position: fixed; z-index: 10; left: 0; top: 0; pointer-events: none;
+  background: var(--ed-surface); color: var(--ed-ink); border: 1px solid var(--ed-border-strong);
+  border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: var(--ed-shadow); max-width: min(300px, calc(100vw - 16px));
+}
+.emag-dash .ed-tip-title { font-weight: 650; margin-bottom: 4px; overflow-wrap: anywhere; }
+.emag-dash .ed-tip-row { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.emag-dash .ed-tip-k { display: inline-flex; align-items: center; gap: 6px; color: var(--ed-ink-2); }
+.emag-dash .ed-tip-k i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.emag-dash .ed-tip-v { font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- lățime mare: bare pe 3 coloane (subgrid ține coloanele aliniate între rânduri) ---------- */
+@container ed (min-width: 720px) {
+  @supports (grid-template-columns: subgrid) {
+    .emag-dash .ed-bars { grid-template-columns: minmax(140px, 240px) minmax(0, 1fr) max-content; column-gap: 12px; }
+    .emag-dash .ed-bar-row { grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; }
+    .emag-dash .ed-bar-name { grid-row: 1; grid-column: 1; }
+    .emag-dash .ed-bar-track { grid-row: 1; grid-column: 2; }
+    .emag-dash .ed-bar-val { grid-row: 1; grid-column: 3; white-space: nowrap; }
+  }
+}
+
+/* ---------- lățime mică ---------- */
+@container ed (max-width: 560px) {
+  .emag-dash .ed-card { padding: 16px; }
+  .emag-dash .ed-hl-v { font-size: 26px; }
+  .emag-dash .ed-fl-val { font-size: 16px; }
+  /* Rândul-bară (categorii, vânzători) pe două linii: numele pe toată lățimea, cifrele dedesubt. Pe o singură linie coloana
+     numelui rămânea îngustă (cifrele „3.130,01 Lei · 12,5 % · 25 buc” ocupă mult), iar overflow-wrap: anywhere rupea
+     cuvintele în mijloc („Calculatoar/e”). Pe toată lățimea, un cuvânt se rupe doar dacă nu încape deloc pe un rând. */
+  .emag-dash .ed-bar-row { grid-template-columns: minmax(0, 1fr); }
+  .emag-dash .ed-bar-val { text-align: left; }
+}
+
+/* ---------- tabele lungi ca liste de carduri ----------
+   Tabelele cu clasa ed-tbl-cards (Achiziții peste prag, produse, vânzători, excluse, evidențiate) au 4–8 coloane
+   și 460–960 px lățime naturală: pe un ecran îngust coloanele de la dreapta (valoarea, starea) ieșeau din ecran.
+   Sub 960 px fiecare rând devine un card: produsul sus, apoi perechile etichetă / valoare. Antetul rămâne în
+   arborele de accesibilitate (ascuns doar vizual); etichetele din carduri vin din data-label și sunt ascunse
+   cititoarelor de ecran (conținutul alternativ gol), ca să nu fie citite de două ori. */
+@container ed (max-width: 960px) {
+  .emag-dash .ed-tbl-cards,
+  .emag-dash .ed-tbl-cards tbody,
+  .emag-dash .ed-tbl-cards tfoot { display: block; }
+  .emag-dash .ed-tbl-cards thead {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+  }
+  .emag-dash .ed-tbl-cards tr {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 132px), 1fr)); gap: 8px 14px;
+    padding: 12px 14px; border-bottom: 1px solid var(--ed-grid);
+  }
+  .emag-dash .ed-tbl-cards tbody tr:last-child { border-bottom: 0; }
+  .emag-dash .ed-tbl-cards tbody tr:hover { background: var(--ed-ghost); }
+  .emag-dash .ed-tbl-cards tbody tr:hover td { background: none; }
+  .emag-dash .ed-tbl-cards td {
+    display: block; min-width: 0; padding: 0; border: 0; text-align: left; white-space: normal; overflow-wrap: anywhere;
+  }
+  .emag-dash .ed-tbl-cards td::before {
+    content: attr(data-label); content: attr(data-label) / "";
+    display: block; color: var(--ed-muted); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600;
+  }
+  .emag-dash .ed-tbl-cards td:empty { display: none; }
+  .emag-dash .ed-tbl-cards td.ed-name { grid-column: 1 / -1; order: -1; min-width: 0; font-weight: 600; } /* produsul e titlul cardului */
+  .emag-dash .ed-tbl-cards .ed-pill { white-space: normal; } /* „Returnat (marcat anulat de eMAG)” trebuie să încapă în coloana cardului */
+  .emag-dash .ed-tbl-cards td.ed-name::before { content: none; }
+  .emag-dash .ed-tbl-cards td.ed-ph-cell { grid-column: 1 / -1; } /* rândul extensibil cu istoricul ocupă tot cardul produsului */
+  .emag-dash .ed-tbl-cards td.ed-ph-cell::before { content: none; }
+  .emag-dash .ed-tbl-cards tfoot tr { border-top: 1px solid var(--ed-axis); border-bottom: 0; background: var(--ed-ghost); }
+  .emag-dash .ed-tbl-cards tfoot td { font-weight: 650; }
+}
+
+/* ---------- ecran tactil: rândurile-bară (doar tooltip) mai înalte; controalele au deja --ed-target peste tot ---------- */
+@media (pointer: coarse) {
+  .emag-dash .ed-bar-row { padding-block: 9px; min-height: var(--ed-target); } /* pe touch, atingerea unui rând deschide tooltip-ul */
+  .emag-dash .ed-input { font-size: 16px; } /* sub 16 px, iOS face zoom la focus în câmp */
+}
+
+/* ---------- contrast forțat (Windows high contrast) ----------
+   Modul înlocuiește culorile de fundal cu cele ale sistemului: barele (lanțul, categoriile, vânzătorii) și
+   pătratele de legendă, care sunt DOAR fundal, dispăreau. Le păstrăm culorile (ele poartă înțelesul: păstrat,
+   returnat, anulat, în curs) și le dăm contur de text ca să se vadă marginea pe orice fundal. Starea apăsat a
+   comutatoarelor și a filtrelor, care e doar o schimbare de culoare, devine culoarea de selecție a sistemului. */
+@media (forced-colors: active) {
+  .emag-dash .ed-funnel-seg,
+  .emag-dash .ed-bar-fill,
+  .emag-dash .ed-sw { forced-color-adjust: none; border: 1px solid CanvasText; }
+  .emag-dash .ed-sw-ring { border-color: transparent; }
+  .emag-dash .ed-tip-k i { forced-color-adjust: none; }
+  .emag-dash .ed-toggle[aria-pressed="true"],
+  .emag-dash .ed-chip[aria-pressed="true"] {
+    forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; box-shadow: none;
+  }
+}
+
+/* ---------- mișcare: doar proprietăți listate explicit, niciodată „all” ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .emag-dash .ed-bar-row,
+  .emag-dash tbody td { transition: background-color 0.12s ease; }
+  .emag-dash .ed-bar-fill,
+  .emag-dash .ed-funnel-seg { transition: filter 0.12s ease; }
+  .emag-dash .ed-toggle,
+  .emag-dash .ed-chip,
+  .emag-dash .ed-more { transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease; }
+}
+
+/* ---------- tipar ---------- */
+@media print {
+  .emag-dash .ed-card, .emag-dash .ed-tile, .emag-dash .ed-fl-item { break-inside: avoid; }
+  .emag-dash .ed-tip, .emag-dash .ed-toggle { display: none; }
+  .emag-dash .ed-hl .ed-tbl-wrap { max-height: none; overflow: visible; }
+}

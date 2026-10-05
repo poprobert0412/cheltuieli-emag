@@ -1,0 +1,22 @@
+{
+  "_ajutor": "Cuvintele-culoare care se scot din numele unui produs când programul decide dacă două cumpărări sunt „același produs” (același model, în culori diferite). Se potrivesc doar cuvinte întregi, fără diacritice și fără deosebire între litere mari și mici; o intrare cu mai multe cuvinte (ex. 'gri închis') se scoate ca o singură culoare. Capacitatea și dimensiunea (128GB, 43\", 55\") NU sunt aici: sunt produse cu prețuri diferite. Dacă o culoare lipsește, adaug-o aici (cu formele ei: albă, albe, albi...). Dacă un cuvânt de aici face parte dintr-un nume de model, scoate-l. După ce editezi, refaci raportul cu: python ruleaza.py --din-cache iesiri\\<rulare>",
+  "culori": [
+    "alb", "albă", "albi", "albe",
+    "negru", "neagră", "negri", "negre",
+    "roșu", "roșie", "roșii",
+    "albastru", "albastră", "albaștri", "albastre",
+    "verde", "verzi",
+    "galben", "galbenă", "galbeni", "galbene",
+    "gri", "mov", "roz", "maro", "bej", "bordo", "grena", "kaki", "lila", "fucsia", "turcoaz", "bleumarin", "crem",
+    "portocaliu", "portocalie", "portocalii",
+    "violet", "violetă",
+    "auriu", "aurie", "aurii",
+    "argintiu", "argintie", "argintii",
+    "bronz",
+    "gri închis", "gri deschis", "albastru închis", "albastru deschis", "verde închis", "verde deschis",
+    "roșu închis", "roz deschis", "mov închis",
+    "black", "white", "red", "blue", "green", "yellow", "pink", "purple", "orange", "gray", "grey", "silver", "gold",
+    "brown", "beige", "navy", "cyan", "magenta", "teal",
+    "space gray", "space grey", "rose gold"
+  ]
+}

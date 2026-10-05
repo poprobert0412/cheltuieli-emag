@@ -1,0 +1,17 @@
+{
+  "_descriere": "EXEMPLU. Copiază acest fișier în același folder cu numele categorii.personal.json și înlocuiește regulile de mai jos cu ale tale. Regulile personale se evaluează PRIMELE, înaintea celor din categorii.json, și au aceeași schemă: «name» (numele categoriei; dacă există deja în categorii.json, produsele se adună la ea), «patterns» (expresii regulate aplicate pe numele produsului FĂRĂ diacritice și cu litere mici) și, opțional, «exclude» (modele care anulează categoria). Fișierul personal e ignorat de git, deci nu se urcă public. Pune aici titluri de cărți, modele exacte sau mașina ta; în categorii.json rămân doar reguli generice. Dacă fișierul are o greșeală (JSON rupt sau expresie regulată greșită), programul se oprește cu un mesaj care spune fișierul și categoria. Cele două reguli de mai jos sunt inventate.",
+  "categories": [
+    {
+      "name": "Cărți, jocuri și jucării",
+      "patterns": [
+        "\\bcronicile lui varnoth\\b"
+      ]
+    },
+    {
+      "name": "Auto și moto",
+      "patterns": [
+        "\\bmodelul kvartal\\b"
+      ]
+    }
+  ]
+}

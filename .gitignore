@@ -1,0 +1,48 @@
+# Ce NU are voie să ajungă în depozitul public: sesiunea eMAG, comenzile tale, jurnalele, cheile.
+# Verificat cu `git check-ignore -v <cale>` și de tests/test_garda_parole.py; secrete.yml prinde după push ce scapă de aici.
+
+# --- Mediul de lucru local (se reface oricând) ---
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# --- Date personale și sesiunea ta ---
+# Profilul de browser conține sesiunea ta eMAG (cookie-uri): niciodată în git, tratează-l ca pe o parolă.
+.profil_browser/
+# Rezultatele conțin comenzile tale (date personale), iar jurnalele pot cita numere de comandă și căi cu numele contului tău.
+iesiri/
+logs/
+# Fișierele de rezultat, după nume, la orice adâncime: cu `--iesire .` ele ar fi scrise direct sub rădăcină,
+# unde iesiri/ nu le acoperă. Fără «/» la început: se potrivesc oriunde.
+comenzi.json
+retururi.json
+analiza.json
+run_info.json
+produse.csv
+istoric_preturi.csv
+rezumat.txt
+# raport.html doar din rădăcină: templates/raport.html e șablonul programului și TREBUIE să urce.
+/raport.html
+# Regulile tale personale de categorii (pot conține titluri de produse cumpărate): niciodată în git.
+config/categorii.personal.json
+
+# --- Secrete și capturi de trafic ---
+.env
+.env.*
+# Un șablon fără valori poate urca.
+!.env.example
+*.har
+*.log
+
+# --- Fișiere de lucru ale sistemului de operare și ale editorului ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+# Memoria locală a unor unelte de dezvoltare: conține căi cu numele contului tău Windows.
+.impeccable/

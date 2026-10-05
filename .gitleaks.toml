@@ -1,0 +1,20 @@
+# Regulile gitleaks ale proiectului: cele implicite plus două pentru date personale românești.
+# Folosit de .github/workflows/secrete.yml (istoric + arbore curent) și de verificarea locală dinaintea unui commit:
+#   gitleaks dir --config .gitleaks.toml --redact .
+title = "cheltuieli-emag: reguli gitleaks"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "iban-romania"
+description = "IBAN românesc (RO, 2 cifre de control, 20 de caractere, cu sau fără spații)"
+regex = '''\bRO\d{2}(?:\s?[0-9A-Z]{4}){5}\b'''
+keywords = ["ro"]
+
+[[rules]]
+id = "cnp-romania"
+description = "CNP (13 cifre) scris după cuvântul CNP"
+regex = '''(?i)\bcnp\b[^\n\d]{0,20}([1-8]\d{12})\b'''
+secretGroup = 1
+keywords = ["cnp"]
