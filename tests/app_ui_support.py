@@ -525,9 +525,15 @@ def open_app(browser, fake: FakeAppServer, *, width: int = 1280, height: int = 9
         context.add_init_script(init_script)
     page = context.new_page()
     probe = attach_probe(page, fake.origin)
+    failed = []  # cererile căzute în rețea: un app-*.js pierdut ținea pagina pe „loading”, iar adnotarea din CI arată doar selectorul
+    page.on("requestfailed", lambda request: failed.append(f"{request.url} {request.failure}"))
     page.goto(url or fake.page_url(with_token=with_token))
     if wait_for:
-        page.wait_for_selector(wait_for, state="attached")
+        try:
+            page.wait_for_selector(wait_for, state="attached")
+        except Exception as error:  # aceeași așteptare; la eșec spune și ce a văzut pagina
+            error.add_note(f"cereri căzute: {failed or 'niciuna'}; excepții în pagină: {probe.page_errors or 'niciuna'}")
+            raise
     return context, page, probe
 
 
