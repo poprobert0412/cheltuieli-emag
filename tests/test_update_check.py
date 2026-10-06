@@ -366,3 +366,11 @@ def test_the_current_version_is_the_program_version_by_default(monkeypatch):
     monkeypatch.setattr(update_check, "VERSION", version.VERSION)
     result = check_for_update(get_json=FakeGetJson(release(tag="v" + version.VERSION)), enabled=True)
     assert result.current == version.VERSION and result.status == "la-zi"
+
+
+def test_the_hidden_characters_are_exactly_the_old_set():
+    """Curățarea notelor (fără expresie regulată, CodeQL #7) scoate exact caracterele de control (fără rând nou și TAB) și
+    marcajele bidi de dinainte; setul așteptat e scris aici din intervalele lui, independent de cod."""
+    expected = {*range(0x00, 0x09), *range(0x0B, 0x20), *range(0x7F, 0xA0), 0x061C, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A)}
+    removed = {code for code in range(0x3000) if update_check._without_hidden_characters(chr(code)) == ""}
+    assert removed == expected, sorted(removed ^ expected)

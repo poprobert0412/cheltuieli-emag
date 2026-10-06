@@ -24,7 +24,7 @@ else:
 LOCKED_BYTES = 1
 # Deschis pentru citire-scriere (cerut de lacătul Windows), creat dacă lipsește, niciodată trunchiat; fără urmarea unei legături (Unix).
 OPEN_FLAGS = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
-LOCK_FILE_MODE = 0o644
+LOCK_FILE_MODE = 0o600  # doar proprietarul: fișierul e gol, dar nimeni altcineva n-are de ce să-l citească (CodeQL #8)
 # Cât se mai încearcă un lacăt ocupat înainte de „ocupat”: Windows eliberează lacătul unui proces omorât cu o mică întârziere
 # („depinde de resursele sistemului”, documentația LockFileEx), iar o recuperare sau o aplicare reală ține sub o secundă.
 LOCK_WAIT_SECONDS = 2.0

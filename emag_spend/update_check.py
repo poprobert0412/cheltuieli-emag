@@ -9,6 +9,7 @@ Nu ridică niciodată excepții. Ce NU face: nu descarcă (update_download.py) �
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -61,8 +62,16 @@ MESSAGE_UNEXPECTED = "Verificarea versiunii noi a eșuat neașteptat; detaliile 
 # Proprietar GitHub (litere, cifre, cratimă) și numele depozitului (litere, cifre, punct, cratimă, linie jos), fără „.” sau „..”.
 _REPOSITORY = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\.{1,2}\Z)[A-Za-z0-9._-]{1,100}")
 _DIGEST = re.compile(r"sha256:([0-9a-fA-F]{64})")
-# Caractere care nu au ce căuta în textul notelor: control (în afară de rând nou și TAB) și marcajele de direcție (bidi).
-_HIDDEN_CHARACTERS = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
+# Caractere care nu au ce căuta în textul notelor: cele de control (categoria Unicode „Cc”, în afară de rând nou și TAB) și
+# marcajele de direcție (bidi), enumerate unul câte unul: fără intervale de coduri într-o expresie regulată (CodeQL #7).
+_KEPT_CONTROL_CHARACTERS = frozenset("\n\t")
+_BIDI_MARKS = frozenset("\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+
+
+def _without_hidden_characters(text: str) -> str:
+    """Textul fără caractere de control (în afară de rând nou și TAB) și fără marcaje de direcție (bidi)."""
+    return "".join(char for char in text
+                   if char in _KEPT_CONTROL_CHARACTERS or (unicodedata.category(char) != "Cc" and char not in _BIDI_MARKS))
 
 
 @dataclass(frozen=True)
@@ -96,7 +105,7 @@ def release_notes(body: object) -> str:
     """„Ce e nou” din corpul lansării (D20), ca text simplu curățat de caractere ascunse și tăiat la MAX_NOTES_CHARS; "" dacă nu e text."""
     if not isinstance(body, str):
         return ""
-    lines = _HIDDEN_CHARACTERS.sub("", body.replace("\r\n", "\n").replace("\r", "\n")).split("\n")
+    lines = _without_hidden_characters(body.replace("\r\n", "\n").replace("\r", "\n")).split("\n")
     start = next((index for index, line in enumerate(lines) if line.strip().casefold().startswith(NOTES_HEADING)), None)
     if start is None:
         selected = lines[:NOTES_FALLBACK_LINES]
