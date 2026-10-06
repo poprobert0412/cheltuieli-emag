@@ -16,6 +16,8 @@ import os
 import re
 import secrets
 import threading
+import time
+import warnings
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -515,6 +517,51 @@ def attach_probe(page, origin: str) -> Probe:
     return probe
 
 
+# Erori de rețea date de SISTEM, nu de aplicație: pe Windows, un connect() pe loopback eșuează rar cu WSAENOBUFS
+# (net::ERR_NO_BUFFER_SPACE), deși serverul e în regulă (măsurat: o suită întreagă deschide ~5000 de conexiuni, departe de
+# cele 16384 de porturi). Un script al paginii nu vine, iar pagina rămâne la „loading”. Doar pentru ele pagina se încarcă încă
+# o dată; orice altă cerere căzută (RESET, REFUSED, răspuns gol) poate veni dintr-o greșeală a serverului, deci pică testul.
+TRANSIENT_OS_ERRORS = ("net::ERR_NO_BUFFER_SPACE", "net::ERR_INSUFFICIENT_RESOURCES")
+MAX_PAGE_RELOADS = 2
+LOAD_TIMEOUT_SECONDS = 30  # cât se așteaptă ieșirea din „loading”, la fel pentru fiecare încărcare a paginii
+LOAD_POLL_MS = 1000  # din cât în cât se uită după o eroare de sistem în timpul așteptării
+
+
+def transient_os_failure(failed) -> bool:
+    """True dacă vreuna din cererile căzute (text „<adresă> <eroare>”) a căzut din cauza sistemului, nu a serverului."""
+    return any(error in entry for entry in failed for error in TRANSIENT_OS_ERRORS)
+
+
+def _wait_until_loaded(page, wait_for, failed, probe, target) -> None:
+    """Așteaptă `wait_for` cel mult LOAD_TIMEOUT_SECONDS; dacă o cerere a căzut din cauza sistemului, încarcă pagina din nou.
+
+    Fără o astfel de eroare, comportamentul e cel de dinainte: aceeași așteptare, iar la eșec eroarea spune și ce a văzut pagina.
+    La reîncărcare, urmele primei încercări (erori de consolă, excepții, cereri) se șterg, ca testele să judece doar încărcarea bună.
+    """
+    deadline = time.monotonic() + LOAD_TIMEOUT_SECONDS
+    reloads = 0
+    while True:
+        try:
+            page.wait_for_selector(wait_for, state="attached", timeout=LOAD_POLL_MS)
+            return
+        except Exception as error:
+            if type(error).__name__ != "TimeoutError":
+                raise
+            if reloads < MAX_PAGE_RELOADS and transient_os_failure(failed):
+                reloads += 1
+                warnings.warn(f"pagina s-a încărcat din nou (încercarea {reloads}) după o eroare de sistem: {failed}")
+                failed.clear()
+                probe.console.clear()
+                probe.page_errors.clear()
+                probe.urls.clear()
+                page.goto("about:blank")  # altfel un goto la aceeași adresă (doar cu fragment) nu ar reîncărca nimic
+                page.goto(target)
+                deadline = time.monotonic() + LOAD_TIMEOUT_SECONDS
+            elif time.monotonic() >= deadline:
+                error.add_note(f"cereri căzute: {failed or 'niciuna'}; excepții în pagină: {probe.page_errors or 'niciuna'}")
+                raise
+
+
 def open_app(browser, fake: FakeAppServer, *, width: int = 1280, height: int = 900, scheme: str = "light", motion: str = "reduce",
              touch: bool = False, with_token: bool = True, url: str | None = None, init_script: str | None = None,
              forced_colors: str = "none", javascript: bool = True, wait_for: str | None = "html[data-current-screen]:not([data-current-screen='loading'])"):
@@ -527,13 +574,10 @@ def open_app(browser, fake: FakeAppServer, *, width: int = 1280, height: int = 9
     probe = attach_probe(page, fake.origin)
     failed = []  # cererile căzute în rețea: un app-*.js pierdut ținea pagina pe „loading”, iar adnotarea din CI arată doar selectorul
     page.on("requestfailed", lambda request: failed.append(f"{request.url} {request.failure}"))
-    page.goto(url or fake.page_url(with_token=with_token))
+    target = url or fake.page_url(with_token=with_token)
+    page.goto(target)
     if wait_for:
-        try:
-            page.wait_for_selector(wait_for, state="attached")
-        except Exception as error:  # aceeași așteptare; la eșec spune și ce a văzut pagina
-            error.add_note(f"cereri căzute: {failed or 'niciuna'}; excepții în pagină: {probe.page_errors or 'niciuna'}")
-            raise
+        _wait_until_loaded(page, wait_for, failed, probe, target)
     return context, page, probe
 
 
