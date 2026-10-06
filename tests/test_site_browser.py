@@ -583,7 +583,12 @@ def test_site_works_under_a_strict_content_security_policy(browser):
         def log_message(self, *args):
             """Fără zgomot în ieșirea testelor."""
 
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Handler, directory=str(SITE_DIR)))
+    class QueuedServer(http.server.ThreadingHTTPServer):
+        """Loc în coadă pentru toate cele ~20 de fișiere cerute deodată (implicit 5: pe Windows conexiunea în plus era refuzată)."""
+
+        request_queue_size = 64
+
+    server = QueuedServer(("127.0.0.1", 0), functools.partial(Handler, directory=str(SITE_DIR)))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     context = browser.new_context(viewport={"width": 1280, "height": 900})
     try:
