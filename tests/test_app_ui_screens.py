@@ -11,9 +11,10 @@ from pathlib import Path
 
 import pytest
 
+from tests import app_ui_support
 from tests.app_ui_support import (  # noqa: F401 - fixture-urile se găsesc prin importul lor în modul
-    SESSION_DELETED_MESSAGE, FakeAppServer, browser, capture, current_screen, fake, open_page, playwright_instance, probe_problems, sample_runs,
-    wait_js, wait_screen,
+    SESSION_DELETED_MESSAGE, FakeAppServer, browser, capture, current_screen, fake, open_app, open_page, playwright_instance, probe_problems,
+    sample_runs, transient_os_failure, wait_js, wait_screen,
 )
 from tests.test_app_ui_static import EXPECTED_FAQ
 
@@ -24,6 +25,42 @@ ACTIVE_TEXT = "#work-callout [data-active] .callout__text"
 ACTIVE_ELEMENT_JS = "() => { const e = document.activeElement; return e.id || e.getAttribute('aria-label') || e.className.split(' ')[0] || e.tagName; }"
 STEP_STATUSES_JS = "() => [...document.querySelectorAll('#steps .step')].map((e) => e.dataset.status)"
 STEP_STATUS_TEXTS_JS = "() => [...document.querySelectorAll('#steps .step__status')].map((e) => e.textContent)"
+
+
+@pytest.mark.parametrize("failure, transient", [
+    ("net::ERR_NO_BUFFER_SPACE", True), ("net::ERR_INSUFFICIENT_RESOURCES", True),
+    ("net::ERR_CONNECTION_RESET", False), ("net::ERR_CONNECTION_REFUSED", False), ("net::ERR_EMPTY_RESPONSE", False), ("net::ERR_FAILED", False),
+])
+def test_only_errors_given_by_the_operating_system_make_the_page_load_again(failure, transient):
+    """Doar erorile date de sistem (pe Windows, WSAENOBUFS la connect) se reiau; RESET, REFUSED sau răspunsul gol pot fi greșeli ale serverului."""
+    assert transient_os_failure([f"http://127.0.0.1:1/assets/app-state.js {failure}"]) is transient
+    assert transient_os_failure([]) is False
+
+
+def test_a_page_whose_script_hit_an_error_from_the_system_is_loaded_again(browser, fake, monkeypatch):
+    """Simulat: serverul închide fără răspuns prima cerere pentru app-state.js (în Chromium: ERR_EMPTY_RESPONSE), iar eroarea aceasta e
+    tratată ca eroare de sistem. open_app încarcă pagina din nou, ajunge la un ecran și nu lasă nicio urmă a primei încercări."""
+    monkeypatch.setattr(app_ui_support, "TRANSIENT_OS_ERRORS", ("net::ERR_EMPTY_RESPONSE",))
+    original = app_ui_support._Handler.do_GET
+    dropped = []
+
+    def drop_the_first(self):
+        if self.path == "/assets/app-state.js" and not dropped:
+            dropped.append(self.path)
+            self.close_connection = True
+            self.connection.close()
+            return None
+        return original(self)
+
+    monkeypatch.setattr(app_ui_support._Handler, "do_GET", drop_the_first)
+    with pytest.warns(UserWarning, match="s-a încărcat din nou"):
+        context, page, probe = open_app(browser, fake)
+    try:
+        assert dropped == ["/assets/app-state.js"]
+        assert current_screen(page) == "ready"
+        assert probe_problems(probe) == {}
+    finally:
+        context.close()
 
 
 @pytest.mark.parametrize("module", ["faq", "download", "history", "update"])
