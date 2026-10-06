@@ -3,8 +3,8 @@
 # (Settings > Security > Private vulnerability reporting); până atunci SECURITY.md spune ce faci.
 blank_issues_enabled: false
 contact_links:
-  - name: Citește întâi README și întrebările frecvente
-    url: https://github.com/poprobert0412/cheltuieli-emag#readme
+  - name: Citește întâi întrebările frecvente
+    url: https://github.com/poprobert0412/cheltuieli-emag/blob/main/docs/INTREBARI.md
     about: Răspunsuri la întrebările frecvente (de ce e nevoie de login, de ce diferă cifrele, ce înseamnă avertismentele).
   - name: Instalare pas cu pas și probleme frecvente
     url: https://github.com/poprobert0412/cheltuieli-emag/blob/main/docs/INSTALARE.md

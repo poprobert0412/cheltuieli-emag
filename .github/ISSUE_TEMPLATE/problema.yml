@@ -14,7 +14,7 @@ body:
 
         **O problemă de securitate NU se descrie aici.** Vezi [SECURITY.md](https://github.com/poprobert0412/cheltuieli-emag/blob/main/SECURITY.md).
 
-        Înainte de a trimite, verifică [întrebările frecvente](https://github.com/poprobert0412/cheltuieli-emag#întrebări-frecvente) și [tabelul de probleme frecvente](https://github.com/poprobert0412/cheltuieli-emag/blob/main/docs/INSTALARE.md#probleme-frecvente).
+        Înainte de a trimite, verifică [întrebările frecvente](https://github.com/poprobert0412/cheltuieli-emag/blob/main/docs/INTREBARI.md) și [tabelul de probleme frecvente](https://github.com/poprobert0412/cheltuieli-emag/blob/main/docs/INSTALARE.md#probleme-frecvente).
 
   - type: textarea
     id: pasi
@@ -73,11 +73,11 @@ body:
   - type: input
     id: python
     attributes:
-      label: Versiunea de Python
-      description: Într-un Command Prompt scrie `python --version`.
+      label: Versiunea de Python (doar dacă rulezi din git, cu Python-ul tău)
+      description: Lansatorul își aduce singur Python-ul, deci de obicei lași gol. Dacă rulezi din git, scrie rezultatul lui `python --version`.
       placeholder: "ex. 3.13.1"
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: browser
@@ -94,8 +94,8 @@ body:
     id: versiune
     attributes:
       label: Versiunea programului
-      description: Data la care ai descărcat ZIP-ul sau, dacă folosești git, rezultatul comenzii `git log -1 --format=%h`.
-      placeholder: "ex. descărcat pe 5 octombrie 2026"
+      description: Versiunea scrisă sub titlul aplicației sau ce afișează `porneste.bat --versiune` (pe Mac/Linux `./porneste.sh --versiune`); dacă programul nu pornește deloc, rândul `VERSION` din `emag_spend/version.py`; dacă folosești git, și rezultatul comenzii `git log -1 --format=%h`.
+      placeholder: "ex. 1.0.0"
     validations:
       required: false
 

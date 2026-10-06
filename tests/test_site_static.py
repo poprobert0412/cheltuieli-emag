@@ -370,7 +370,7 @@ def _launcher_versions() -> dict[str, str]:
 
 def test_honest_statements_are_present():
     """Ce trebuie spus deschis: starea testării, cererile ferestrei de browser, textul liber salvat, pauzele dintre cereri."""
-    assert "nu a fost rulată încă de la cap la coadă pe un cont real" in INDEX
+    assert "a rulat cap-coadă pe un singur cont real, pe Windows" in INDEX and "testată doar cu pagini inventate" in INDEX
     assert "contactează și serviciile lor" in INDEX and "Programul nu controlează aceste cereri" in INDEX
     assert "câteva câmpuri se salvează ca text liber" in INDEX and "Ce face parserul" in INDEX
     assert "fără pauze între ele (pauză doar după o eroare)" in INDEX
