@@ -46,3 +46,12 @@ Thumbs.db
 .vscode/
 # Memoria locală a unor unelte de dezvoltare: conține căi cu numele contului tău Windows.
 .impeccable/
+
+# Ce descarcă lansatoarele la prima pornire (uv, Python, pachete, Chromium): rămâne doar pe calculatorul tău.
+.uv/
+
+# --- Actualizări (decis 5 oct. 2026, D8, D10) ---
+# Folderul de lucru al actualizării: arhiva descărcată, extragerea, copia fișierelor vechi, jurnalul și lacătul.
+.actualizare/
+# Lista fișierelor unei lansări: o generează lansare.yml în arhivă (git ls-files), nu se ține în depozit.
+instalare/fisiere.txt

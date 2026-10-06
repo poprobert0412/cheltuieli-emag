@@ -176,9 +176,34 @@ def extras_summary() -> dict:
     return data
 
 
+def strip_paid(summary: dict) -> dict:
+    """Copie a analizei fără nimic din „plătit efectiv” (cheia `paid` și câmpurile plătite și de link de pe rânduri): un analiza.json vechi."""
+    data = copy.deepcopy(summary)
+    data.pop("paid", None)
+    paid_key = lambda key: key.startswith("paid_") or key.endswith("_paid_bani") or key in ("spent_bani", "order_count")
+    for row in data["by_category"] + data["by_year"] + data["by_seller"] + data["big"]["items"]:
+        for key in [k for k in row if paid_key(k)]:
+            del row[key]
+    for row in data["top_products"] + data.get("uncategorized", []):
+        for key in [k for k in row if paid_key(k) or k == "order_id"]:
+            del row[key]
+    for key in [k for k in data["big"] if paid_key(k)]:
+        del data["big"][key]
+    for block in data.get("highlights", {}).values():
+        for row in [block["totals"]] + block["items"]:
+            for key in [k for k in row if paid_key(k)]:
+                del row[key]
+    return data
+
+
+def pre_paid_summary() -> dict:
+    """Un analiza.json de dinainte de „plătit efectiv”, dar cu prețuri și avertismente pe grupe: `extras_summary` fără cheile plătite."""
+    return strip_paid(extras_summary())
+
+
 def legacy_summary() -> dict:
-    """Un analiza.json de dinainte de prețuri și avertismente pe grupe: scenariul mic fără cele două chei noi (și cu avertismente text)."""
-    data = copy.deepcopy(small_summary())
+    """Un analiza.json de dinainte de prețuri, avertismente pe grupe și „plătit efectiv”: scenariul mic fără cheile noi (și cu avertismente text)."""
+    data = strip_paid(small_summary())
     del data["price_history"], data["warnings_detail"]
     data["warnings"] = ["comanda 100000401, Vânzător Test SRL: lipsește 'Total platit'", "2 produse necategorizate (adaugă reguli în config/categorii.json)"]
     return data

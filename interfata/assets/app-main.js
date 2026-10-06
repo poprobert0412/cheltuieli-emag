@@ -27,6 +27,7 @@
     safely('session', App.session.init);
     safely('download', App.download.init);
     safely('report', App.report.init);
+    safely('update', App.update.init);
     safely('faq', App.faq.init);
     safely('lifecycle', App.lifecycle.init);
     safely('pornire', App.lifecycle.start);

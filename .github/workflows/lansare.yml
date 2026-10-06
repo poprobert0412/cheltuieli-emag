@@ -1,0 +1,106 @@
+# Lansare: când autorul împinge o etichetă de versiune (ex. v1.0.0), face pagina din „Releases” cu arhiva pentru toate
+# sistemele (Windows, macOS, Linux) și amprentele SHA-256 ale ei, ca oricine să poată verifica ce a descărcat.
+# Întâi (decis 6 oct. 2026, N13), pe exact commit-ul etichetei, rulează toate testele (teste.yml) și pornirea de la zero pe cele
+# trei sisteme (pornire.yml); dacă oricare pică, nu se publică nimic.
+# Apoi (decis 5 oct. 2026, D16): eticheta trebuie să fie exact "v" + VERSION din emag_spend/version.py, iar CHANGELOG.md
+# trebuie să aibă secțiunea `## X.Y.Z — AAAA-LL-ZZ`; altfel nu se publică nimic.
+# Arhiva e exact conținutul etichetei din git (git archive): fără fișiere personale, fără .venv sau .uv; lansatoarele
+# păstrează bitul de execuție. În ea intră și manifestul instalare/fisiere.txt (lista fișierelor, pentru actualizare), iar
+# arhiva e verificată cu aceleași reguli ca la actualizare înainte de publicare. Pagina lansării începe cu „Ce e nou”.
+# După publicare rulează testul actualizării (actualizare.yml): o lansare făcută cu GITHUB_TOKEN nu pornește alte workflow-uri.
+# Dacă el nu reușește (pică sau e oprit), jobul „retrage” marchează lansarea ca prerelease: releases/latest, de unde aplicația
+# află de versiunile noi, n-o mai oferă utilizatorilor (N13).
+# Drepturi: contents: write doar la jobul care creează lansarea și la cel care o retrage; restul, doar citire.
+name: Lansare
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  teste:
+    name: teste
+    permissions:
+      contents: read
+    uses: ./.github/workflows/teste.yml
+
+  pornire:
+    name: pornire de la zero
+    permissions:
+      contents: read
+    uses: ./.github/workflows/pornire.yml
+
+  lansare:
+    name: arhivă și pagina lansării
+    needs: [teste, pornire]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Descarcă codul
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verifică eticheta, versiunea și CHANGELOG-ul
+        env:
+          ETICHETA: ${{ github.ref_name }}
+        run: |
+          VERSIUNE=$(python3 .github/scripts/release_version.py "$ETICHETA")
+          python3 .github/scripts/changelog_section.py "$VERSIUNE"
+          echo "VERSIUNE=$VERSIUNE" >> "$GITHUB_ENV"
+
+      # --prefix de dinainte de --add-file pune manifestul în instalare/, cel de după îl pune pe restul arhivei.
+      - name: Face manifestul, arhiva și amprentele
+        env:
+          ETICHETA: ${{ github.ref_name }}
+        run: |
+          NUME="cheltuieli-emag-$ETICHETA"
+          python3 .github/scripts/release_manifest.py --ref HEAD "$RUNNER_TEMP/fisiere.txt"
+          git archive --format=zip --prefix="$NUME/instalare/" --add-file="$RUNNER_TEMP/fisiere.txt" --prefix="$NUME/" -o "$NUME.zip" HEAD
+          python3 .github/scripts/release_archive_check.py "$NUME.zip" "$VERSIUNE"
+          sha256sum "$NUME.zip" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Creează lansarea
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ETICHETA: ${{ github.ref_name }}
+        run: |
+          NUME="cheltuieli-emag-$ETICHETA"
+          python3 .github/scripts/release_body.py --versiune "$VERSIUNE" --depozit "$GITHUB_REPOSITORY" --amprente SHA256SUMS.txt > note.md
+          gh release create "$ETICHETA" "$NUME.zip" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --title "Cheltuieli eMAG $ETICHETA" --notes-file note.md
+
+  actualizare:
+    name: testul actualizării
+    needs: lansare
+    permissions:
+      contents: read
+    uses: ./.github/workflows/actualizare.yml
+    with:
+      eticheta: ${{ github.ref_name }}
+
+  retrage:
+    name: retrage lansarea dacă testul actualizării nu reușește
+    needs: [lansare, actualizare]
+    # always(): rulează și când testul actualizării a picat sau a fost oprit, dar doar dacă lansarea chiar s-a publicat.
+    if: always() && needs.lansare.result == 'success' && needs.actualizare.result != 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Marchează lansarea ca prerelease, ca aplicația să n-o mai ofere
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ETICHETA: ${{ github.ref_name }}
+        run: |
+          gh release edit "$ETICHETA" --repo "$GITHUB_REPOSITORY" --prerelease
+          # releases/latest e chiar adresa din care aplicația află de versiunile noi; fără altă lansare publicată răspunde 404.
+          ULTIMA=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2> /dev/null || true)
+          if [ "$ULTIMA" = "$ETICHETA" ]; then echo "::error::$ETICHETA e încă ultima lansare după retragere."; exit 1; fi
+          echo "::error::Testul actualizării nu a reușit: $ETICHETA e acum prerelease și nu mai e oferită ca versiune nouă. Repar-o și lansează o versiune nouă."

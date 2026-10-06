@@ -11,7 +11,10 @@ Reguli:
   potrivire identică);
 - la marketplace, eMAG marchează produsul returnat "Livrare anulata": o
   unitate "anulată" găsită în retur devine "returnată", ca să nu fie numărată
-  ca anulare și nici scăzută a doua oară.
+  ca anulare și nici scăzută a doua oară;
+- un retur cu doar o parte din produse potrivite se notează în raport
+  (`partially_matched_return_ids`): suma lui restituită nu e doar a lor.
+Fiecare unitate returnată lasă numărul returului în `line.return_ids` (câte o intrare pe unitate).
 """
 
 import difflib
@@ -36,6 +39,9 @@ class ReturnMatchReport:
     matched_from_cancelled_units: int = 0
     warnings: list[str] = field(default_factory=list)
     unmatched_refund_bani: int = 0  # restituiri fără produs potrivit
+    # Retururile finalizate cu o parte din produse potrivite și o parte nu: suma lor restituită acoperă și produse care au
+    # rămas „păstrate”, deci nu se poate atribui întreagă produselor potrivite (paid_totals.py o tratează separat).
+    partially_matched_return_ids: list[str] = field(default_factory=list)
 
 
 _TRUNCATION_MARKER = re.compile(r"\s*(?:\[\.\.\.\]|\.\.\.|…)\s*$")
@@ -114,6 +120,8 @@ def apply_returns(lines: list[LineOutcome], returns: list[ReturnRequest]) -> Ret
             report.matched_units += 1
         if unmatched_here and unmatched_here == len(ret.product_names):
             report.unmatched_refund_bani += ret.refund_bani or 0
+        elif unmatched_here:
+            report.partially_matched_return_ids.append(ret.return_id)
     logger.info(
         "retururi aplicate: %d unități (din care %d marcate 'anulat' de eMAG), %d avertismente",
         report.matched_units, report.matched_from_cancelled_units, len(report.warnings),

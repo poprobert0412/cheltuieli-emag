@@ -12,7 +12,7 @@ import pytest
 
 from emag_spend import app_security, app_server
 from emag_spend.app_server import STOP_IDLE, STOP_INTERRUPTED, STOP_SHUTDOWN, AppServer, IdleMonitor
-from tests.app_support import POLL_SECONDS, WAIT_SECONDS, FakeRunner, running_app, wait_for, write_interface
+from tests.app_support import POLL_SECONDS, WAIT_SECONDS, FakeRunner, FakeUpdateJob, running_app, wait_for, write_interface
 
 SHORT_IDLE_SECONDS = 0.3  # timp mic injectat în loc de cele 30 de minute reale
 
@@ -89,7 +89,7 @@ def test_ctrl_c_stops_the_server_cleanly_and_stops_the_run(tmp_path, monkeypatch
     """Ctrl+C (KeyboardInterrupt în bucla principală) oprește serverul curat: motiv «interrupted», rularea e oprită, socket-ul e închis."""
     fake = FakeRunner()
     server = AppServer(runner=fake, outputs_dir=tmp_path / "iesiri", profile_dir=tmp_path / "profil", interface_dir=tmp_path / "interfata",
-                       idle_seconds=3600, poll_seconds=POLL_SECONDS)
+                       idle_seconds=3600, poll_seconds=POLL_SECONDS, update_job=FakeUpdateJob())
     port = server.port
 
     def interrupted(timeout=None):

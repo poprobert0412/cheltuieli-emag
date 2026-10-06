@@ -1,0 +1,121 @@
+# „Pornire de la zero”: pe Windows, macOS și Linux, pornește programul exact ca un utilizator care l-a descărcat, fără Python
+# instalat de el: lansatorul descarcă uv (verificat cu amprenta SHA-256 din instalare/versiuni.txt), Python și pachetele,
+# apoi rulează demonstrația (comenzi inventate, fără cont) și aplicația locală (doar pe 127.0.0.1), pe care o interoghează și o oprește.
+# Pe Linux mai verifică varianta fără Edge/Chrome: Chromium descărcat de program. La final, că nimic n-a ajuns în folderele
+# obișnuite ale lui uv și Playwright din folderul personal. Îl cheamă și lansare.yml, înainte de publicare (decis 6 oct. 2026,
+# N13). Fără secrete, drepturi doar de citire.
+name: Pornire de la zero
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+# Numele grupului e scris aici, nu luat din github.workflow: chemat din lansare.yml, github.workflow ar fi „Lansare” și
+# pentru teste.yml, deci cele două ar cădea în același grup și unul l-ar anula pe celălalt.
+concurrency:
+  group: pornire-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pornire:
+    name: pornire (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Descarcă codul
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Reper de timp pentru ultimul pas: orice fișier mai nou decât el, în folderele obișnuite ale lui uv și Playwright
+      # din folderul personal, înseamnă că pornirea a scris în afara folderului programului.
+      - name: Reține momentul de start
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then T=$(cygpath -u "$RUNNER_TEMP"); else T="$RUNNER_TEMP"; fi
+          touch "$T/inceput-pornire"
+
+      - name: Lansatorul Windows, cu demonstrația
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: porneste.bat --demo < NUL
+
+      - name: Lansatorul macOS, cu demonstrația
+        if: runner.os == 'macOS'
+        run: ./porneste.command --demo < /dev/null
+
+      - name: Lansatorul Linux, cu demonstrația
+        if: runner.os == 'Linux'
+        run: ./porneste.sh --demo < /dev/null
+
+      - name: A doua pornire nu mai descarcă nimic
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then cmd //c "porneste.bat --demo < NUL" > a-doua.log 2>&1; else ./porneste.sh --demo < /dev/null > a-doua.log 2>&1; fi
+          cat a-doua.log | tail -5
+          if grep -qi "descarc" a-doua.log; then echo "A doua pornire a descărcat din nou:"; cat a-doua.log; exit 1; fi
+
+      - name: Verifică raportul demonstrativ și ce s-a descărcat
+        run: |
+          ls iesiri/*_demo/raport.html iesiri/*_demo/analiza.json
+          test -d .uv/python && test -d .uv/cache && test -x .uv/bin/uv -o -f .uv/bin/uv.exe
+          git status --porcelain --untracked-files=all | grep -v -E '^\?\? (\.uv/|\.venv/|iesiri/|logs/|a-doua\.log)' && { echo "Pornirea a modificat fișiere urmărite de git"; exit 1; } || true
+
+      - name: Aplicația locală pornește, răspunde doar cu cheie și se oprește
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
+          export PYTHONUTF8=1
+          "$PY" ruleaza.py --aplicatie --fara-browser > server.log 2>&1 &
+          for i in $(seq 1 60); do URL=$(grep -o 'http://127\.0\.0\.1:[0-9]*/aplicatie\.html#t=[A-Za-z0-9_-]*' server.log | head -1); [ -n "$URL" ] && break; sleep 1; done
+          [ -n "$URL" ] || { cat server.log; exit 1; }
+          PORT=$(echo "$URL" | sed 's#http://127.0.0.1:\([0-9]*\)/.*#\1#'); TOKEN=${URL##*#t=}
+          test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/aplicatie.html")" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/api/hello")" = 401
+          curl -sf -H "X-App-Token: $TOKEN" "http://127.0.0.1:$PORT/api/hello" | grep -q cheltuieli-emag
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "X-App-Token: $TOKEN" -H 'Host: evil.example' "http://127.0.0.1:$PORT/api/hello")" = 403
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "X-App-Token: $TOKEN" -H 'Content-Type: application/json' -d '{}' "http://127.0.0.1:$PORT/api/shutdown")" = 200
+          wait
+
+      - name: Linux fără Edge și Chrome - Chromium descărcat de program
+        if: runner.os == 'Linux'
+        env:
+          EMAG_BROWSER_CHANNEL: chromium
+        run: |
+          export ROOT="$PWD"; . instalare/mediu.sh
+          .venv/bin/python -m playwright install chromium
+          sudo --preserve-env=PLAYWRIGHT_BROWSERS_PATH .venv/bin/python -m playwright install-deps chromium
+          .venv/bin/python -m emag_spend.browser_check
+
+      - name: Nimic în folderul personal - uv și Playwright își țin totul în folderul programului
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            T=$(cygpath -u "$RUNNER_TEMP"); LOCAL=$(cygpath -u "$LOCALAPPDATA"); ROAMING=$(cygpath -u "$APPDATA")
+            set -- "$LOCAL/uv" "$ROAMING/uv" "$HOME/.local/bin" "$LOCAL/ms-playwright"
+          else
+            T="$RUNNER_TEMP"
+            set -- "$HOME/.cache/uv" "$HOME/.local/share/uv" "$HOME/.local/bin" "$HOME/.cache/ms-playwright" "$HOME/Library/Caches/ms-playwright"
+          fi
+          test -f "$T/inceput-pornire"
+          for d in "$@"; do
+            [ -d "$d" ] || continue
+            # „|| true”: cu pipefail, head care se oprește după 5 rânduri ar face pasul să pice fără mesaj.
+            NOI=$(find "$d" -newer "$T/inceput-pornire" | head -5 || true)
+            if [ -n "$NOI" ]; then echo "Pornirea a scris în afara folderului programului, în $d:"; echo "$NOI"; exit 1; fi
+          done
+          echo "Nimic nou în: $*"
+
+      - name: Verifică scripturile shell
+        if: runner.os == 'Linux'
+        run: |
+          shellcheck --shell=sh --external-sources porneste.sh porneste.command instalare/pregatire.sh instalare/mediu.sh
+          shellcheck --shell=bash .github/scripts/actualizare_ci.sh

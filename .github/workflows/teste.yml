@@ -1,6 +1,7 @@
-# Rulează toate testele (inclusiv gărzile de rețea, parole și scriere) la fiecare push pe main și la fiecare pull request.
-# Windows, pentru că programul și lansatoarele .bat sunt pentru Windows; Python 3.13 și 3.14 (cele testate).
-# Testele de browser folosesc Edge, preinstalat pe windows-latest; dacă un browser lipsește, testele respective se sar.
+# Rulează toate testele (inclusiv gărzile de rețea, parole și scriere) la fiecare push pe main și la fiecare pull request,
+# pe Windows, macOS și Linux. Testele de browser folosesc Edge sau Chrome, preinstalate pe mașinile GitHub; dacă un browser
+# lipsește, testele respective se sar (și apar în jurnal cu motivul). Testele .bat rulează doar pe Windows.
+# Îl cheamă și lansare.yml, înainte de publicare (decis 6 oct. 2026, N13): o lansare apare doar după ce testele trec.
 # Fără secrete: workflow-ul nu primește niciunul și are drepturi doar de citire.
 name: Teste
 
@@ -8,23 +9,30 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
 
+# Numele grupului e scris aici, nu luat din github.workflow: chemat din lansare.yml, github.workflow ar fi „Lansare” și
+# pentru pornire.yml, deci cele două ar cădea în același grup și unul l-ar anula pe celălalt.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: teste-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   pytest:
-    name: pytest (Windows, Python ${{ matrix.python }})
-    runs-on: windows-latest
+    name: pytest (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.13", "3.14"]
+        include:
+          - { os: windows-latest, python: "3.13" }
+          - { os: windows-latest, python: "3.14" }
+          - { os: macos-latest, python: "3.13" }
+          - { os: ubuntu-latest, python: "3.13" }
     env:
       PYTHONUTF8: "1"
       PYTHONDONTWRITEBYTECODE: "1"
@@ -39,7 +47,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      # Aceleași opțiuni ca în instaleaza.bat: doar pachete gata făcute, fără memorie locală.
+      # Ca la utilizatori: doar pachete gata făcute (fără cod de instalare rulat de pe internet), fără memorie locală.
       - name: Instalează dependențele
         run: "python -m pip install --disable-pip-version-check --no-cache-dir --only-binary=:all: -r requirements-dev.txt"
 

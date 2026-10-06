@@ -33,9 +33,10 @@ EXPECTED_SCRIPT_ORDER = (
     "assets/app-theme.js", "assets/dashboard.js", "assets/app-dom.js", "assets/app-format.js", "assets/app-api.js",
     "assets/app-state.js", "assets/app-screens.js", "assets/app-poll.js", "assets/app-threshold.js", "assets/app-start.js",
     "assets/app-run.js", "assets/app-history.js", "assets/app-session.js", "assets/app-download.js", "assets/app-report.js",
-    "assets/app-faq.js", "assets/app-lifecycle.js", "assets/app-main.js",
+    "assets/app-update.js", "assets/app-faq.js", "assets/app-lifecycle.js", "assets/app-main.js",
 )
-EXPECTED_SCREENS = ("loading", "closed-needs-app", "closed-stopped", "closed-user", "closed-nokey", "ready", "working", "done", "error", "cancelled")
+EXPECTED_SCREENS = ("loading", "closed-needs-app", "closed-stopped", "closed-user", "closed-nokey", "closed-updated", "ready", "working", "done", "error",
+                    "cancelled")
 EXPECTED_FAQ = (
     "faq-ce-face", "faq-ce-citeste", "faq-login", "faq-durata", "faq-inchid", "faq-salvare", "faq-opresc",
     "faq-avertismente", "faq-cifre", "faq-sigur", "faq-nu-merge", "faq-internet",
@@ -197,7 +198,7 @@ def test_inputs_have_names_and_no_autofill_traps():
 
 
 def test_screens_inventory_and_headings():
-    """Exact cele 10 ecrane; fiecare (în afară de loading) are un titlu h2 țintă de focus (tabindex=-1) legat prin aria-labelledby."""
+    """Exact cele 11 ecrane; fiecare (în afară de loading) are un titlu h2 țintă de focus (tabindex=-1) legat prin aria-labelledby."""
     screens = [e for e in PAGE.elements if e.tag == "section" and "data-screen" in e.attrs]
     assert tuple(s.attrs["data-screen"] for s in screens) == EXPECTED_SCREENS
     for screen in screens:
@@ -216,7 +217,7 @@ def test_live_regions_and_progressbar_are_wired():
     bar = by_id("progress-bar")
     assert bar.attrs.get("role") == "progressbar" and bar.attrs.get("aria-labelledby") == "progress-label"
     assert (bar.attrs.get("aria-valuemin"), bar.attrs.get("aria-valuemax")) == ("0", "100")
-    for hint_id in ("threshold-hint", "session-msg", "dl-msg", "start-error"):
+    for hint_id in ("threshold-hint", "session-msg", "dl-msg", "start-error", "update-status"):
         assert by_id(hint_id).attrs.get("aria-live") == "polite", hint_id
 
 
@@ -252,7 +253,7 @@ def test_faq_has_every_question_as_native_details():
     """Cele 12 întrebări din brief, ca <details> native cu <summary>, cu id-uri stabile; toate legăturile #faq-... duc la ele."""
     items = [e for e in PAGE.elements if e.tag == "details" and "faq__item" in e.attrs.get("class", "")]
     assert tuple(i.attrs["id"] for i in items) == EXPECTED_FAQ
-    assert len(elements("summary")) == len(items) + 1  # +1: „Schimbă pragul” (details-ul de opțiuni)
+    assert len(elements("summary")) == len(items) + 2  # +2: „Schimbă pragul” (opțiunile) și „Ce e nou” (banda versiunii noi)
     for link in elements("a"):
         if link.attrs.get("href", "").startswith("#faq-"):
             assert link.attrs["href"][1:] in EXPECTED_FAQ

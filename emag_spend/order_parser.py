@@ -5,6 +5,7 @@ Dă înapoi: `Order` cu blocuri pe vânzător, produse, status, vouchere, transp
 Nu citește adresa, telefonul sau e-mailul. Ce nu se leagă (sume diferite) devine avertisment în
 `Order.warnings` (texte din warning_messages.py), nu excepție; ValueError doar dacă pagina nu e o comandă.
 Un bloc ANULAT nu are „Total platit” (pagina lui arată „Total de plata”, suma de plătit): lipsa lui nu e avertisment.
+„Total de plata” se citește separat (`due_bani`), nu ca taxă: altfel o sumă calculată din componente l-ar număra de două ori.
 """
 
 import re
@@ -206,6 +207,9 @@ def parse_order(order_id: str, lines: list[str], product_names: list[str] | None
             totals_zone = True
         elif normalized.startswith("total platit"):
             current.paid_bani = _amount_for_label(lines, i)
+            totals_zone = False
+        elif normalized.startswith("total de plata"):
+            current.due_bani = _amount_for_label(lines, i)
             totals_zone = False
         elif normalized.startswith("reducere"):
             amount = _amount_for_label(lines, i)

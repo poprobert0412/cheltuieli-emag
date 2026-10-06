@@ -1,11 +1,15 @@
 """Serverul HTTP LOCAL al aplicației cu un singur buton (python ruleaza.py --aplicatie): API-ul JSON și pagina din interfata/.
 
 Primește: cereri HTTP doar de pe acest calculator. Dă înapoi: răspunsuri JSON (contractul din brief, pct. 6) și fișierele din lista albă
-(app_static.py). Se leagă DOAR la 127.0.0.1, port ales de sistem (port 0), niciodată la 0.0.0.0, și nu trimite nimic spre exterior.
+(app_static.py). Se leagă DOAR la 127.0.0.1, port ales de sistem (port 0), niciodată la 0.0.0.0; serverul însuși nu trimite nimic spre
+exterior (verificarea versiunii noi o face app_update_job.py, în fundal, doar dacă settings.update_check_enabled()).
 Ordinea verificărilor: Host exact (403), Origin exactă sau absentă (403), token în X-App-Token pe /api/* (401), metodă (405), apoi pe POST
 Content-Type JSON și corp limitat (415/400/413). Fără CORS; antetele de securitate (app_security.py) pleacă pe ORICE răspuns, și pe erori.
-Se oprește la Ctrl+C, la POST /api/shutdown și singur după o perioadă fără cereri, cât timp nu rulează o analiză (variabila de mediu opțională
-EMAG_APP_IDLE_MINUTES = minute fără cereri, implicit 30, între 1 și 1440). Ce NU face: nu rulează analiza (app_runner.py), nu citește rulările (app_runs.py)."""
+Actualizarea (decis 5 oct. 2026, D18): GET /api/update și POST /api/update/apply; analiza și actualizarea se exclud (409 una cât rulează
+cealaltă), iar după o actualizare reușită serverul se oprește cu STOP_UPDATED (ruleaza.py iese cu settings.EXIT_CODE_RESTART).
+Se oprește la Ctrl+C, la POST /api/shutdown și singur după o perioadă fără cereri, cât timp nu rulează o analiză sau o actualizare (variabila
+de mediu opțională EMAG_APP_IDLE_MINUTES = minute fără cereri, implicit 30, între 1 și 1440).
+Ce NU face: nu rulează analiza (app_runner.py), nu citește rulările (app_runs.py), nu descarcă și nu instalează (app_update_job.py)."""
 
 import json
 import logging
@@ -19,7 +23,7 @@ from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from emag_spend import app_runs, app_security, session_cleaner, settings
+from emag_spend import app_runs, app_security, app_update_job, session_cleaner, settings, version
 from emag_spend.app_runner import AppRunner, InvalidRunRequest, RunnerBusy, describe_session_deletion, parse_run_request
 from emag_spend.app_static import StaticFiles
 
@@ -31,8 +35,8 @@ LOOPBACK_HOST = "127.0.0.1"
 ANY_FREE_PORT = 0
 
 APP_NAME = "cheltuieli-emag"
-# Versiunea afișată de /api/hello: PROPUS (nu există altă sursă de versiune în proiect); o fixează Robert la prima publicare.
-APP_VERSION = "0.1.0"
+# Versiunea afișată de /api/hello: sursa unică e emag_spend/version.py (decis 5 oct. 2026, D1).
+APP_VERSION = version.VERSION
 API_VERSION = 1
 INTERFACE_DIR = settings.PROJECT_ROOT / "interfata"
 
@@ -51,10 +55,17 @@ REQUEST_TIMEOUT_SECONDS = 15
 # în loc de răspuns). Peste limită doar închidem: un client care trimite megaocteți ca să fie respins nu merită răspuns frumos.
 MAX_DRAIN_BYTES = 1024 * 1024
 DRAIN_CHUNK_BYTES = 64 * 1024
+# La oprirea serverului în timp ce actualizarea scrie fișierele: cât o așteptăm să termine. Câteva sute de fișiere se mută în
+# câteva secunde; plafonul acoperă și reîncercările la fișiere ținute o clipă de antivirus. Dacă tot nu termină, procesul iese
+# oricum, iar ruleaza.py revine la versiunea veche la pornirea următoare (D11).
+UPDATE_INSTALL_JOIN_SECONDS = 120
 
 STOP_SHUTDOWN = "shutdown"
 STOP_IDLE = "idle"
 STOP_INTERRUPTED = "interrupted"
+# Oprire după o actualizare aplicată din pagină: ruleaza.py iese cu settings.EXIT_CODE_RESTART, iar lansatorul pornește
+# varianta nouă (decis 5 oct. 2026, D12).
+STOP_UPDATED = "updated"
 
 HTTP_ERROR_MESSAGES = {
     400: "Cererea nu are forma corectă.",
@@ -83,7 +94,10 @@ API_ROUTES = (
     (re.compile(rf"/api/runs/{_RUN_ID_IN_PATH}/files/{_FILE_NAME_IN_PATH}"), ("GET",), "_api_download"),
     (re.compile(r"/api/session/delete"), ("POST",), "_api_delete_session"),
     (re.compile(r"/api/shutdown"), ("POST",), "_api_shutdown"),
+    (re.compile(r"/api/update"), ("GET",), "_api_update"),
+    (re.compile(r"/api/update/apply"), ("POST",), "_api_update_apply"),
 )
+MESSAGE_RUN_REFUSED_UPDATING = "Se instalează o actualizare a programului; analiza poate porni după ce aplicația repornește."
 
 
 def idle_minutes_from_environment() -> int:
@@ -203,7 +217,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.close_connection = True
         self._send_json(status, {"error": {"code": code, "message": message}}, headers)
         if status in (401, 403):
-            logger.warning("cerere respinsă: %s %.120r -> %d (%s)", self.command, self.path, status, code)
+            # Metoda și calea vin de la client: trec prin loggable (fără CR/LF), ca nimeni să nu poată scrie rânduri false în jurnal.
+            logger.warning("cerere respinsă: %s %r -> %d (%s)", app_security.loggable(self.command), app_security.loggable(self.path), status, code)
         if self.command == "POST" and not self._body_read:
             self._discard_unread_body()
 
@@ -233,7 +248,7 @@ class _Handler(BaseHTTPRequestHandler):
         except (ConnectionError, TimeoutError):
             self.close_connection = True  # clientul a plecat: nu mai are cui să-i răspundem
         except Exception:
-            logger.exception("eroare internă la tratarea cererii %s %.120r", self.command, self.path)
+            logger.exception("eroare internă la tratarea cererii %s %r", app_security.loggable(self.command), app_security.loggable(self.path))
             self.close_connection = True
             try:
                 self._send_json(500, {"error": {"code": "internal_error", "message": HTTP_ERROR_MESSAGES[500]}})
@@ -342,12 +357,16 @@ class _Handler(BaseHTTPRequestHandler):
         self._send_json(200, app.runner.snapshot())
 
     def _api_runs(self, app: "AppServer", body: dict | None = None) -> None:
-        """GET /api/runs: lista rulărilor anterioare; POST /api/runs: pornește o rulare (202 + id, 400 la cerere greșită, 409 dacă una e în curs)."""
+        """GET /api/runs: lista rulărilor anterioare; POST /api/runs: pornește o rulare (202 + id, 400 la cerere greșită,
+        409 dacă una e în curs sau dacă se instalează o actualizare)."""
         if self.command == "GET":
             return self._send_json(200, app.runs.list_runs())
         try:
             request = parse_run_request(body)
-            run_id = app.runner.start(request)
+            with app.start_lock:  # verificarea actualizării și pornirea analizei, atomic față de POST /api/update/apply
+                if app.update_job.is_blocking():
+                    return self._reject(409, app_update_job.ERROR_UPDATE_IN_PROGRESS, MESSAGE_RUN_REFUSED_UPDATING)
+                run_id = app.runner.start(request)
         except InvalidRunRequest as error:
             return self._reject(400, error.code, error.message)
         except RunnerBusy:
@@ -396,6 +415,20 @@ class _Handler(BaseHTTPRequestHandler):
         self._send_json(200, {"stopping": True})
         app.request_stop(STOP_SHUTDOWN)
 
+    def _api_update(self, app: "AppServer") -> None:
+        """GET /api/update: versiunea curentă, rezultatul verificării și starea aplicării (forma din app_update_job.UpdateJob.snapshot)."""
+        self._send_json(200, app.update_job.snapshot())
+
+    def _api_update_apply(self, app: "AppServer", body: dict) -> None:
+        """POST /api/update/apply: pornește actualizarea (202 {"apply": ...}); 409 dacă rulează o analiză, nu e versiune nouă,
+        folderul e copie git sau actualizarea e deja în curs. Corpul nu contează (doar trebuie să fie un obiect JSON)."""
+        try:
+            with app.start_lock:  # atomic față de POST /api/runs: niciodată analiză și actualizare în același timp
+                apply = app.update_job.start_apply()
+        except app_update_job.ApplyRefused as refused:
+            return self._reject(409, refused.code, refused.message)
+        self._send_json(202, {"apply": apply})
+
 
 class AppServer:
     """Serverul local: se leagă la creare, servește la `serve()` până la oprire și întoarce motivul opririi."""
@@ -403,10 +436,12 @@ class AppServer:
     def __init__(self, *, runner=None, runs: app_runs.RunsStore | None = None, interface_dir: Path | None = None,
                  outputs_dir: Path | None = None, profile_dir: Path | None = None, log_path: Path | None = None,
                  idle_seconds: float | None = None, poll_seconds: float = POLL_INTERVAL_SECONDS,
-                 clock: Callable[[], float] = time.monotonic, token: str | None = None):
+                 clock: Callable[[], float] = time.monotonic, token: str | None = None,
+                 update_job: app_update_job.UpdateJob | None = None):
         """Pregătește serverul și îl leagă la 127.0.0.1, port ales de sistem.
 
         Implicit totul vine din settings (iesiri/, profilul, interfata/) și din EMAG_APP_IDLE_MINUTES; testele dau valori proprii.
+        `update_job` (implicit app_update_job.UpdateJob cu modulele reale) se poate înlocui în teste, ca nimic să nu iasă pe internet.
         Ridică ValueError dacă EMAG_APP_IDLE_MINUTES e greșită (înainte să se lege orice) și OSError dacă legarea eșuează.
         """
         timeout = idle_seconds if idle_seconds is not None else idle_minutes_from_environment() * 60
@@ -416,6 +451,10 @@ class AppServer:
         self.runs = runs if runs is not None else app_runs.RunsStore(outputs)
         self.static = StaticFiles(Path(interface_dir) if interface_dir is not None else INTERFACE_DIR)
         self.token = token if token is not None else app_security.new_token()
+        self.update_job = update_job if update_job is not None else app_update_job.UpdateJob()
+        self.update_job.attach(is_run_busy=self.runner.is_busy, on_applied=self._stop_for_update)
+        # Ține împreună „verifică cealaltă activitate” și „pornește-o pe a ta” la POST /api/runs și POST /api/update/apply.
+        self.start_lock = threading.Lock()
         self._idle = IdleMonitor(timeout, clock)
         self._idle_seconds = timeout
         self._poll_seconds = poll_seconds
@@ -450,22 +489,28 @@ class AppServer:
                 self._stop_reason = reason
         self._stop.set()
 
+    def _stop_for_update(self) -> None:
+        """Chemată de job după o actualizare reușită: oprește serverul cu STOP_UPDATED, ca lansatorul să pornească varianta nouă."""
+        self.request_stop(STOP_UPDATED)
+
     def _idle_expired(self) -> bool:
-        """True dacă a trecut timpul fără cereri; cât rulează o analiză, serverul nu se oprește (și ceasul se repornește)."""
-        if self.runner.is_busy():
+        """True dacă a trecut timpul fără cereri; cât rulează o analiză sau o actualizare, serverul nu se oprește (și ceasul se repornește)."""
+        if self.runner.is_busy() or self.update_job.is_blocking():
             self._idle.note_activity()
             return False
         return self._idle.expired()
 
     def serve(self) -> str:
-        """Servește până la oprire și întoarce motivul (STOP_SHUTDOWN, STOP_IDLE sau STOP_INTERRUPTED la Ctrl+C).
+        """Servește până la oprire și întoarce motivul (STOP_SHUTDOWN, STOP_IDLE, STOP_UPDATED sau STOP_INTERRUPTED la Ctrl+C).
 
-        La final oprește rularea în curs (browserul se închide), oprește firul serverului și închide socket-ul.
+        Pornește verificarea versiunii noi în fundal (doar dacă settings.update_check_enabled()). La final oprește rularea în curs
+        (browserul se închide), așteaptă o actualizare care tocmai scrie fișierele, oprește firul serverului și închide socket-ul.
         """
         thread = threading.Thread(target=self._httpd.serve_forever, kwargs={"poll_interval": self._poll_seconds},
                                   name="server-aplicatie", daemon=True)
         thread.start()
         logger.info("aplicația ascultă pe %s:%d (oprire automată după %g minute fără cereri)", LOOPBACK_HOST, self.port, self.idle_minutes)
+        self.update_job.start_check(enabled=settings.update_check_enabled())
         reason = STOP_INTERRUPTED
         try:
             while True:
@@ -482,6 +527,8 @@ class AppServer:
             thread.join()
             if not self.runner.shutdown():
                 logger.warning("rularea în curs nu s-a oprit la timp; închid aplicația oricum")
+            if not self.update_job.wait_for_install(UPDATE_INSTALL_JOIN_SECONDS):
+                logger.warning("actualizarea nu a terminat de scris fișierele la timp; la pornirea următoare se revine la versiunea veche")
             self._httpd.server_close()
         logger.info("aplicația s-a oprit (%s)", reason)
         return reason

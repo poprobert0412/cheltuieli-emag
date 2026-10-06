@@ -19,11 +19,11 @@
   let rechecking = false;
   let shuttingDown = false;
 
-  /** Arată versiunea aplicației în subsol. */
+  /** Arată versiunea aplicației sub titlu, discret (decis 5 oct. 2026, D18: mereu vizibilă); verificarea o adaugă app-update.js. */
   function showVersion(version) {
     const box = App.dom.byId('app-version');
     if (!box || typeof version !== 'string' || version === '') return;
-    box.textContent = 'Versiunea aplicației: ' + version + '.';
+    box.textContent = 'Versiunea ' + version;
     box.hidden = false;
   }
 

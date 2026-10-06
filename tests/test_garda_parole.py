@@ -89,6 +89,7 @@ ALLOWED_ENV_VARS = {
     "EMAG_FETCH_CONCURRENCY": "câte pagini se cer simultan",
     "EMAG_LOGIN_WAIT_SECONDS": "cât așteaptă login-ul manual",
     "EMAG_APP_IDLE_MINUTES": "după câte minute fără cereri se oprește singură aplicația locală",
+    "EMAG_UPDATE_CHECK": "oprește (cu «0») verificarea automată a versiunii noi la pornirea aplicației locale (decis 5 oct. 2026, D2)",
 }
 ENV_ACCESS_NAMES = frozenset({"os.environ", "os.environb", "os.getenv", "os.getenvb", "os.putenv", "os.unsetenv"})
 

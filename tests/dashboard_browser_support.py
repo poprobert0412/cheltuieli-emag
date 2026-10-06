@@ -18,7 +18,7 @@ from emag_spend import settings
 
 LOCAL_SCHEMES = ("file:", "data:", "blob:", "about:")
 DEMO_DATA_PREFIX = "window.EMAG_DEMO_DATA = "
-BROWSER_CHANNELS = (settings.BROWSER_CHANNEL, "msedge", "chrome")
+BROWSER_CHANNELS = tuple(c for c in (settings.BROWSER_CHANNEL, "msedge", "chrome") if c)  # gol = automat: Edge, apoi Chrome
 
 
 @dataclass

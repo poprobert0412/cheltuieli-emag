@@ -332,8 +332,9 @@ def test_two_instances_in_one_page_do_not_interfere(open_page, data):
     settle(page)
     assert blocks(page, "a") == BLOCKS and blocks(page, "b") == BLOCKS
     hero = lambda root: (page.inner_text(f"#{root} .ed-big"), page.inner_text(f"#{root} .ed-cents"))
-    assert hero("a") == (money(data["demo"]["funnel"]["kept_bani"]).split(",")[0], f",{data['demo']['funnel']['kept_bani'] % 100:02d}{NBSP}Lei")
-    assert hero("b") == ("3.130", f",01{NBSP}Lei")
+    spent = data["demo"]["paid"]["spent_bani"]  # cifra mare = banii plătiți efectiv (cheia `paid`)
+    assert hero("a") == (money(spent).split(",")[0], f",{spent % 100:02d}{NBSP}Lei")
+    assert hero("b") == ("3.080", f",01{NBSP}Lei")  # scenariul mic: 3.130,01 la preț de listă, minus voucherul de 50,00
     page.click("#a [data-ed-block='categories'] .ed-toggle")
     assert page.get_attribute("#a [data-ed-block='categories'] .ed-toggle", "aria-pressed") == "true"
     assert page.get_attribute("#b [data-ed-block='categories'] .ed-toggle", "aria-pressed") == "false"
@@ -407,7 +408,8 @@ def test_table_toggle_works_from_the_keyboard_and_keeps_one_label(open_page, dat
     assert page.get_attribute(toggle, "aria-pressed") == "true" and page.inner_text(toggle) == "Vezi tabel"
     assert page.is_visible("#a [data-ed-block='categories'] table") and not page.is_visible("#a [data-ed-block='categories'] .ed-bars")
     rows = page.locator("#a [data-ed-block='categories'] tbody tr").count()
-    assert rows == len(data["demo"]["by_category"])
+    extra = [r for r in data["demo"]["paid"]["extra_rows"] if r["bani"]]  # „Transport și taxe”… au rândul lor
+    assert rows == len(data["demo"]["by_category"]) + len(extra)
     page.keyboard.press("Space")
     assert page.get_attribute(toggle, "aria-pressed") == "false" and page.is_visible("#a [data-ed-block='categories'] .ed-bars")
     assert "Graficul e afișat" in page.inner_text("#a [role='status']")
@@ -478,7 +480,7 @@ def test_funnel_segments_and_chart_columns_are_focusable_with_tooltips(open_page
     page, _ = open_page()
     mount(page)
     page.focus("#a .ed-funnel-seg >> nth=0")
-    assert "Păstrat" in page.inner_text("#a .ed-tip-title") and "Valoare" in page.inner_text("#a .ed-tip")
+    assert "Plătit efectiv" in page.inner_text("#a .ed-tip-title") and "Valoare" in page.inner_text("#a .ed-tip")
     page.focus("#a svg.ed-chart .ed-hit >> nth=0")
     assert page.inner_text("#a .ed-tip-title") == data["demo"]["by_year_category"]["years"][0]
     label = page.get_attribute("#a svg.ed-chart .ed-hit >> nth=0", "aria-label")
@@ -578,7 +580,7 @@ def test_scrollable_regions_are_keyboard_reachable_only_when_they_overflow(open_
 def test_numbers_dates_and_units_follow_romanian_conventions(open_page, data):
     page, _ = open_page()
     mount(page, "small", "a", "{}")
-    kept = data["small"]["funnel"]["kept_bani"]
+    kept = data["small"]["paid"]["spent_bani"]
     assert page.inner_text("#a .ed-big") == money(kept).split(",")[0]
     assert page.inner_text("#a .ed-cents") == f",{kept % 100:02d}{NBSP}Lei"
     period = page.inner_text("#a .ed-meta-line")
@@ -597,7 +599,7 @@ def test_numbers_dates_and_units_follow_romanian_conventions(open_page, data):
 def test_formatting_falls_back_to_manual_romanian_when_intl_is_unusable(open_page, script):
     page, probe = open_page(init_script=script)
     mount(page, "small", "a", "{}")
-    assert page.inner_text("#a .ed-big") == "3.130" and page.inner_text("#a .ed-cents") == f",01{NBSP}Lei"
+    assert page.inner_text("#a .ed-big") == "3.080" and page.inner_text("#a .ed-cents") == f",01{NBSP}Lei"
     assert page.inner_text("#a .ed-meta-line").endswith("generat 04.10.2026, 12:00")
     assert "10.03.2024" in page.inner_text("#a .ed-meta-line")
     assert_clean(probe)

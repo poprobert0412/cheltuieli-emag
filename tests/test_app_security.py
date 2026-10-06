@@ -215,3 +215,32 @@ def test_the_page_url_carries_the_token_only_in_the_fragment_and_can_be_built_wi
     with_token = app_security.build_app_url(PORT, "abc_DEF-123")
     assert with_token == f"http://127.0.0.1:{PORT}/aplicatie.html#t=abc_DEF-123"
     assert "?" not in with_token, "tokenul în query ar pleca spre server și ar ajunge în jurnale"
+
+
+# ---------- jurnal: valorile venite din cerere nu pot falsifica rânduri ----------
+
+@pytest.mark.parametrize("raw", ["/api/state\r\n2026-10-05 [x] WARNING: rând fals", "/a\nb", "/a\rb", "GET\x00\x1b[31m"])
+def test_loggable_removes_line_breaks_and_control_characters(raw):
+    """Calea sau metoda trimise de client trec în jurnal pe un singur rând, fără CR/LF și fără caractere de control."""
+    shown = app_security.loggable(raw)
+    assert "\r" not in shown and "\n" not in shown, "un CR/LF în jurnal ar permite unui client să scrie rânduri false"
+    assert all(ch.isprintable() for ch in shown), shown
+
+
+def test_loggable_cuts_long_values_and_keeps_normal_paths_unchanged():
+    """O cale obișnuită rămâne neschimbată; una uriașă se taie la LOG_VALUE_LIMIT caractere."""
+    assert app_security.loggable("/api/runs/2026-10-05_12-40-32/analysis") == "/api/runs/2026-10-05_12-40-32/analysis"
+    assert len(app_security.loggable("/" + "a" * 10_000)) == app_security.LOG_VALUE_LIMIT
+
+
+def test_server_logs_request_values_only_through_loggable():
+    """Orice apel de jurnal din app_server.py care pomenește self.path sau self.command trece prin app_security.loggable."""
+    from emag_spend import app_server
+
+    source = inspect.getsource(app_server)
+    calls = [line.strip() for line in source.splitlines() if "logger." in line and ("self.path" in line or "self.command" in line)]
+    assert calls, "testul nu mai găsește apelurile de jurnal: verifică app_server.py"
+    for line in calls:
+        for raw in ("self.path", "self.command"):
+            if raw in line:
+                assert f"loggable({raw})" in line, f"{raw} ajunge în jurnal fără loggable: {line}"

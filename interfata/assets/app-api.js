@@ -1,6 +1,7 @@
 /* app-api.js — clientul aplicației locale: cheia de acces și toate cererile către /api/*.
  * Primește: fragmentul adresei (#t=<cheie>), pus de program când deschide pagina. Dă înapoi, ca window.App.api, funcții
- * care întorc Promise: hello, getState, startRun, cancelRun, listRuns, getAnalysis, getFile (Blob), deleteSession, shutdown.
+ * care întorc Promise: hello, getState, startRun, cancelRun, listRuns, getAnalysis, getFile (Blob), deleteSession, shutdown,
+ * getUpdate (versiunea nouă și starea actualizării), applyUpdate („Actualizează acum”).
  * Cheia: citită o singură dată, scoasă din adresă cu history.replaceState și ținută DOAR în memoria acestui fișier;
  * nu ajunge în localStorage, sessionStorage, cookie, în vreo adresă cerută sau în linkuri. Pleacă doar în antetul X-App-Token.
  * Singurul loc din interfață care face cereri de rețea, și doar spre căi relative /api/... (aceeași origine = aplicația
@@ -140,6 +141,8 @@
   function shutdown() { return request('POST', '/api/shutdown', { body: {} }); }
   // Cuvântul de confirmare e mereu „DA”: ecranul acceptă și „da”, dar aplicația cere exact „DA” (ca --sterge-sesiunea).
   function deleteSession() { return request('POST', '/api/session/delete', { body: { confirm: 'DA' } }); }
+  function getUpdate() { return request('GET', '/api/update'); }
+  function applyUpdate() { return request('POST', '/api/update/apply', { body: {} }); }
 
   /** Pornește o rulare: mode 'real' sau 'demo'; thresholdLei doar dacă omul a schimbat pragul (altfel aplicația folosește implicitul ei). */
   function startRun(mode, thresholdLei) {
@@ -174,6 +177,8 @@
     getFile: getFile,
     deleteSession: deleteSession,
     shutdown: shutdown,
+    getUpdate: getUpdate,
+    applyUpdate: applyUpdate,
     ApiError: ApiError,
     FILE_NAMES: FILE_NAMES.slice(),
   };

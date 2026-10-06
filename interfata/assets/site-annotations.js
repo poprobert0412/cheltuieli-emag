@@ -21,70 +21,70 @@
   /** Adnotările, în ordinea paginii raportului. `block` = valoarea data-ed-block din componentă. */
   var ITEMS = [
     { slug: 'cifra', block: 'hero', title: 'Cifra mare',
-      shows: 'Suma produselor păstrate: livrate sau ridicate și rămase la tine, fără cele returnate, anulate sau încă nelivrate, plus numărul lor de bucăți.',
-      source: '`funnel.kept_bani` = comandat − anulat − returnat − în curs (− status necunoscut). Perioada vine din `meta.first_order` și `meta.last_order`.',
-      read: 'E „cât ai cheltuit pe produse”, la prețurile afișate de eMAG înainte de vouchere. Nu e suma care a ieșit din cont.',
-      check: 'Că perioada acoperă toate comenzile tale și că bucățile păstrate se potrivesc cu ce știi că ai primit.' },
-    { slug: 'lant', block: 'funnel', title: 'Lanțul comandat → păstrat',
-      shows: 'Cum se împarte valoarea comandată: păstrat, returnat, anulat, în curs (și status necunoscut, dacă există). Culorile sunt fixe: păstrat albastru, returnat portocaliu, anulat gri, în curs verde-smarald.',
-      source: '`funnel.*`: fiecare produs are o singură stare, deci părțile se adună exact la `funnel.ordered_bani`. Dacă nu s-ar aduna, ar apărea avertismentul „lanțul sumelor nu se închide”.',
-      read: 'Segmentele sunt proporționale cu valoarea. Cu mouse-ul sau cu focusul vezi bucățile și procentul din comandat.',
+      shows: 'Banii plătiți efectiv pe ce ai păstrat: după vouchere și reduceri, cu transportul și taxele, minus banii primiți înapoi la retururi. Sub ea, din ce se compune: prețul de listă, reducerile, transportul și taxele.',
+      source: '`paid.spent_bani` = „Total plătit” al comenzilor livrate sau ridicate − banii primiți înapoi la retururi. Perioada vine din `meta.first_order` și `meta.last_order`.',
+      read: 'E „cât ai cheltuit”, pe baza sumelor plătite afișate de eMAG în fiecare comandă. Prețul de listă rămâne dedesubt, ca informație.',
+      check: 'Că perioada acoperă toate comenzile tale și că, la o comandă pe care o știi, produsul și transportul se potrivesc cu „Total plătit” din pagina ei.' },
+    { slug: 'lant', block: 'funnel', title: 'Lanțul comandat → plătit',
+      shows: 'Cum se împarte suma comandată, după reduceri: plătit efectiv, returnat cu bani înapoi, anulat, în curs (și status necunoscut, dacă există), plus transportul și taxele comenzilor livrate. Culorile sunt fixe: plătit albastru, returnat portocaliu, anulat gri, în curs verde-smarald.',
+      source: '`paid.funnel.*`: fiecare produs are o singură stare, iar comandat − anulat − returnat − în curs + transport și taxe = plătit efectiv. Dacă nu s-ar închide, ar apărea avertismentul „lanțul sumelor nu se închide”.',
+      read: 'Segmentele sunt proporționale cu suma. Cu mouse-ul sau cu focusul vezi bucățile și procentul din total.',
       check: 'Că returnatul și anulatul sunt cele pe care le știi; un „în curs” mare cere o privire în cont.' },
     { slug: 'cifre', block: 'tiles', title: 'Cifre rapide',
-      shows: 'Câte comenzi sunt păstrate integral, parțial, returnate sau anulate; cât s-a returnat și cât s-a anulat; câte produse păstrate depășesc pragul; totalul pe categoriile evidențiate.',
-      source: '`orders.*`, `funnel.returned_bani`, `funnel.cancelled_bani`, `big.*` și `highlights.*`. O comandă e „păstrată parțial” dacă măcar un produs a rămas, iar altele au fost returnate sau anulate.',
+      shows: 'Câte comenzi sunt păstrate integral, parțial, returnate sau anulate; cât ai primit înapoi la retururi și cât s-a anulat; câte produse păstrate depășesc pragul; totalul pe categoriile evidențiate.',
+      source: '`orders.*`, `paid.funnel.returned_bani`, `paid.funnel.cancelled_bani`, `big.*` și `highlights.*`. O comandă e „păstrată parțial” dacă măcar un produs a rămas, iar altele au fost returnate sau anulate.',
       read: 'Fiecare cifră se citește singură; nu se adună între ele.',
       check: 'Că numărul de comenzi se potrivește cu istoricul din contul tău.' },
     { slug: 'categorii', block: 'categories', title: 'Pe ce s-au dus banii',
-      shows: 'Valoarea păstrată pe categorii, ca bare. „Vezi tabel” adaugă comandat, returnat, anulat și în curs pe fiecare categorie.',
-      source: '`by_category`. Categoria vine din `config/categorii.json`: prima regulă care se potrivește cu numele produsului câștigă. Fără potrivire, produsul intră la „Necategorizat”.',
-      read: 'Fiecare bară arată valoarea, procentul din total și bucățile păstrate.',
+      shows: 'Banii plătiți pe categorii, ca bare, plus rândurile care nu sunt produse: „Transport și taxe” și, dacă există, retururile cu voucher sau diferențele la restituiri. „Vezi tabel” adaugă comandat, returnat, anulat și în curs pe fiecare categorie.',
+      source: '`by_category` (`paid_kept_bani`) și `paid.extra_rows`. Fiecare produs primește partea lui din reducerile comenzii, proporțional cu prețul. Categoria vine din `config/categorii.json`: prima regulă care se potrivește cu numele produsului câștigă.',
+      read: 'Toate rândurile se adună exact la cifra mare. Fiecare bară arată suma, procentul din total și bucățile păstrate.',
       check: 'Un „Necategorizat” mare înseamnă reguli lipsă: adaugă-le și refă raportul cu `--din-cache`.' },
     { slug: 'evidentiate', block: 'highlights', title: 'Categorii evidențiate',
-      shows: 'Totalul și lista produselor din categoriile cerute explicit, cu starea fiecărei părți (păstrat, returnat, anulat, în curs).',
+      shows: 'Totalul plătit și lista produselor din categoriile cerute explicit, cu starea fiecărei părți (păstrat, returnat, anulat, în curs). Numele fiecărui produs duce la comanda lui pe eMAG.',
       source: '`highlights.<categorie>`: totalurile vin din `by_category`, iar lista e pe stări. Categoriile evidențiate se aleg din setările programului; lista afișată e limitată, iar toate rândurile sunt în `produse.csv`.',
-      read: 'Cifra mare e ce ai păstrat; sub ea sunt comandatul, returnatul, anulatul și, dacă există, ce e încă în curs, pentru aceeași categorie.',
+      read: 'Cifra mare e ce ai plătit pe ce ai păstrat, după reduceri; sub ea sunt comandatul, returnatul, anulatul și, dacă există, ce e încă în curs.',
       check: 'Că produsele listate chiar sunt din categoria respectivă: regulile pe nume pot greși la denumiri ambigue.' },
     { slug: 'ani', block: 'years', title: 'Pe ani',
-      shows: 'Valoarea păstrată pe anul în care s-a plasat comanda, pe coloane stivuite după cele mai mari categorii; restul se strâng la „Altele”.',
-      source: '`by_year_category` pentru grafic și `by_year` pentru tabel. Anul e cel al comenzii, nu al livrării sau al returului.',
+      shows: 'Banii plătiți efectiv pe anul în care s-a plasat comanda, pe coloane stivuite după cele mai mari categorii; restul se strâng la „Altele”.',
+      source: '`paid.by_year_category` pentru grafic și `by_year` pentru tabel. Anul e cel al comenzii, nu al livrării sau al returului.',
       read: 'Un retur făcut în alt an scade din anul comenzii inițiale, nu din anul returului.',
       check: 'Că anii corespund cu momentele în care ai cumpărat; „Vezi tabel” arată și comandat, returnat și anulat pe an.' },
     { slug: 'mari', block: 'big', title: 'Achiziții peste prag',
-      shows: 'Produsele al căror preț pe bucată depășește strict pragul ({prag}, modificabil cu `--prag`), fiecare cu starea ei.',
+      shows: 'Produsele al căror preț de listă pe bucată depășește strict pragul ({prag}, modificabil cu `--prag`), fiecare cu starea ei și suma plătită, după reduceri.',
       source: '`big.items`, filtrate după `big.threshold_bani`. „Marcat anulat de eMAG” înseamnă retur finalizat la un bloc pe care eMAG îl afișează „Livrare anulată”.',
-      read: 'Butoanele de filtrare sunt „Toate” și starea fiecărei linii (păstrate, returnate, anulate, în curs, necunoscute), doar cele care există; totalul din subsolul tabelului urmează filtrul. Sub data fiecărei linii, numărul comenzii e un link către pagina ei de pe eMAG (se deschide doar când apeși pe el).',
+      read: 'Butoanele de filtrare sunt „Toate” și starea fiecărei linii (păstrate, returnate, anulate, în curs, necunoscute), doar cele care există; totalul din subsolul tabelului urmează filtrul. Numele produsului și numărul comenzii duc la pagina comenzii pe eMAG (se deschid doar când apeși pe ele).',
       check: 'Că starea fiecărei achiziții mari e cea pe care o știi; un preț exact egal cu pragul nu apare aici.' },
     { slug: 'top', block: 'top', title: 'Produse cu cea mai mare valoare păstrată',
-      shows: 'Produsele cu cea mai mare valoare totală păstrată, grupate după nume. Ordinea e după suma păstrată, nu după prețul pe bucată.',
-      source: '`top_products`: valoarea păstrată din toate comenzile în care apare același nume (comparat fără diacritice și fără diferențe de litere). Lista e limitată la primele.',
-      read: 'Un produs cumpărat de mai multe ori apare o singură dată, cu bucățile și valoarea însumate: unul ieftin cumpărat des poate trece înaintea unuia scump cumpărat o dată.',
+      shows: 'Produsele pe care ai plătit cel mai mult, după reduceri, grupate după nume. Ordinea e după suma totală, nu după prețul pe bucată.',
+      source: '`top_products`: suma plătită din toate comenzile în care apare același nume (comparat fără diacritice și fără diferențe de litere), cu comanda cea mai recentă în `order_id`. Lista e limitată la primele.',
+      read: 'Un produs cumpărat de mai multe ori apare o singură dată, cu bucățile și suma însumate. Numele duce la comanda lui cea mai recentă pe eMAG.',
       check: 'Că numele din listă sunt produse pe care le recunoști.' },
     { slug: 'preturi', block: 'preturi', title: 'Prețuri la același produs',
-      shows: 'Produsele păstrate din cel puțin două comenzi diferite: prețul pe bucată la fiecare cumpărare (primul, ultimul, minim, maxim), cu cât e mai scump sau mai ieftin ultimul preț față de cel dinainte, cât ai plătit peste cel mai mic preț și o micro-diagramă a evoluției.',
+      shows: 'Produsele păstrate din cel puțin două comenzi diferite: prețul de listă pe bucată la fiecare cumpărare (primul, ultimul, minim, maxim), cu cât e mai scump sau mai ieftin ultimul preț față de cel dinainte, cât ai plătit peste cel mai mic preț și o micro-diagramă a evoluției.',
       source: '`price_history` (aceleași date sunt în `istoric_preturi.csv`). „Același produs” înseamnă același model: numele fără diacritice și cu litere mici, din care se scot culorile (`config/culori.json`); capacitatea și dimensiunea rămân în nume. Contează doar bucățile păstrate.',
-      read: 'Cauți un produs după nume, ordonezi tabelul și deschizi istoricul unui produs din rândul lui: vezi numele din fiecare comandă, vânzătorul și linkul comenzii. În micro-diagramă, inelul e prețul minim, iar punctul plin e ultimul preț.',
+      read: 'Cauți un produs după nume, ordonezi tabelul și deschizi istoricul unui produs cu săgeata din rândul lui: vezi numele din fiecare comandă, vânzătorul și linkul comenzii. Numele produsului duce la comanda cea mai recentă. În micro-diagramă, inelul e prețul minim, iar punctul plin e ultimul preț.',
       check: 'Prețul include promoții, e înainte de vouchere și poate veni de la vânzători diferiți: o diferență arată cum s-a schimbat prețul, nu dacă oferta a fost bună sau proastă. Dacă două produse diferite apar ca unul (sau unul ca două), verifică numele din istoric.' },
     { slug: 'vanzatori', block: 'sellers', title: 'Vânzători',
-      shows: 'Valoarea păstrată pe vânzător: eMAG sau vânzători din marketplace.',
-      source: '`by_seller`: numele vânzătorului din titlul fiecărui bloc de comandă. Lista e limitată la primii.',
-      read: 'Fiecare bară arată cât ai păstrat de la acel vânzător, procentul din total și bucățile.',
+      shows: 'Banii plătiți pe produsele păstrate, pe vânzător: eMAG sau vânzători din marketplace (fără transport și taxe).',
+      source: '`by_seller` (`paid_bani`): numele vânzătorului din titlul fiecărui bloc de comandă. Lista e limitată la primii.',
+      read: 'Fiecare bară arată cât ai plătit acelui vânzător pe produse, procentul din total și bucățile.',
       check: 'Dacă vezi un vânzător necunoscut, caută-l în `produse.csv`, coloana „vanzator”.' },
     { slug: 'excluse', block: 'excluded', title: 'Rămase în afara calculului',
       shows: 'Blocuri plătite fără livrare de produse (de exemplu asigurări) și blocuri încă nelivrate.',
-      source: '`paid_only` și `in_progress`, după statusul blocului. Nu intră în suma păstrată.',
-      read: 'Un „în curs” devine păstrat abia după ce statusul arată „Produse livrate” sau „Produse ridicate”.',
+      source: '`paid_only` și `in_progress`, după statusul blocului. Nu intră în cât ai cheltuit.',
+      read: 'Un „în curs” intră în calcul abia după ce statusul arată „Produse livrate” sau „Produse ridicate”.',
       check: 'Dacă ai comenzi vechi încă „în curs”, verifică-le în cont: poate nu mai vin.' },
     { slug: 'control', block: 'control', title: 'Cifre de control și avertismente',
-      shows: 'Totalul plătit pentru blocurile livrate, cu voucherele, transportul și taxele; starea retururilor; avertismentele, grupate pe cauze.',
-      source: '`reconciliation.*`, `warnings` și `warnings_detail`. „Total plătit” e suma „Total platit” a blocurilor livrate sau ridicate, deci include voucherele, transportul și taxele. Titlurile și explicațiile grupelor vin din `config/avertismente.json`.',
-      read: 'Sumele de control nu se compară direct cu „Păstrat”: păstratul e la prețul produselor, înainte de vouchere, și exclude returnatele. Fiecare grupă de avertismente se deschide: ce înseamnă, dacă afectează totalurile, ce faci și comenzile concrete, cu link către eMAG.',
+      shows: 'Reconcilierea cifrei mari: „Total plătit” al blocurilor livrate, minus banii primiți înapoi, egal plătit efectiv; voucherele, transportul și taxele; starea retururilor; avertismentele, grupate pe cauze.',
+      source: '`paid.reconciliation.*`, `reconciliation.*`, `warnings` și `warnings_detail`. Estimările (retururi finalizate fără sumă afișată) sunt numite ca atare. Titlurile și explicațiile grupelor vin din `config/avertismente.json`.',
+      read: 'Un retur cu voucher sau sold eMAG nu se scade: voucherul scade deja „Total plătit” al comenzii în care îl folosești. Fiecare grupă de avertismente se deschide: ce înseamnă, dacă afectează totalurile, ce faci și comenzile concrete, cu link către eMAG.',
       check: 'Fiecare grupă cere o privire în cont, cu linkul comenzii la îndemână. Fără avertismente, verificările interne de sume au trecut; asta nu garantează că paginile eMAG au fost citite corect.' },
     { slug: 'metoda', block: 'method', title: 'Nota de metodă',
-      shows: 'Definițiile și ce nu intră în calcul, în câteva rânduri.',
+      shows: 'Regulile banilor plătiți, ale retururilor și ce nu intră în calcul, în câteva rânduri.',
       source: 'Textul fix al raportului; cifrele nu vin de aici.',
       read: 'Rezumă pe scurt ce explică secțiunea „Cum se calculează”, mai jos.',
-      check: 'Citește-o o dată: explică de ce un retur finalizat se numără ca returnat, nu ca anulare.' }
+      check: 'Citește-o o dată: explică de ce un retur cu voucher nu se scade și de ce un retur finalizat se numără ca returnat, nu ca anulare.' }
   ];
 
   var els = {};
@@ -116,46 +116,46 @@
     var f = Site.fmt;
     if (!D) return null;
     try {
-      var F = D.funnel;
+      var P = D.paid, F = P.funnel;
       switch (item.slug) {
         case 'cifra':
-          return f.lei(F.kept_bani) + ' păstrat din ' + f.lei(F.ordered_bani) + ' comandat: ' + f.units(F.kept_units) + ' din ' + f.int(D.orders.total) + ' comenzi.';
+          return f.lei(P.spent_bani) + ' plătit efectiv: la preț de listă ' + f.lei(P.list_kept_bani) + ', reduceri ' + f.lei(P.discounts_kept_bani) + ', transport și taxe ' + f.lei(P.fees_bani) + '; ' + f.units(P.spent_units) + ' păstrate din ' + f.int(D.orders.total) + ' comenzi.';
         case 'lant':
-          var parts = F.kept_bani + F.returned_bani + F.cancelled_bani + F.pending_bani + (F.unknown_bani || 0);
-          return 'păstrat ' + f.lei(F.kept_bani) + ' + returnat ' + f.lei(F.returned_bani) + ' + anulat ' + f.lei(F.cancelled_bani) + ' + în curs ' + f.lei(F.pending_bani) + (parts === F.ordered_bani ? ' = ' : ' ≠ ') + f.lei(F.ordered_bani) + ' comandat.';
+          var spent = F.ordered_bani - F.cancelled_bani - F.returned_bani - F.pending_bani - (F.unknown_bani || 0) + F.fees_bani;
+          return 'comandat ' + f.lei(F.ordered_bani) + ' − anulat ' + f.lei(F.cancelled_bani) + ' − returnat ' + f.lei(F.returned_bani) + ' − în curs ' + f.lei(F.pending_bani) + ' + transport și taxe ' + f.lei(F.fees_bani) + (spent === F.spent_bani ? ' = ' : ' ≠ ') + f.lei(F.spent_bani) + ' plătit efectiv.';
         case 'cifre':
           var O = D.orders;
           return f.int(O.total) + ' comenzi: ' + f.int(O.kept_all) + ' păstrate integral, ' + f.int(O.kept_partial) + ' parțial, ' + f.int(O.returned_all) + ' returnate integral, ' + f.int(O.cancelled_all) + ' anulate integral, ' + f.int(O.in_progress) + ' în curs.';
         case 'categorii':
           var top = D.by_category[0];
-          var withKept = D.by_category.filter(function (c) { return c.kept_bani > 0; }).length;
-          return f.int(withKept) + ' categorii cu produse păstrate; prima: ' + top.name + ', ' + f.lei(top.kept_bani) + ' (' + f.pct(top.kept_bani, F.kept_bani) + ' din păstrat).';
+          var withKept = D.by_category.filter(function (c) { return c.paid_kept_bani > 0; }).length;
+          return f.int(withKept) + ' categorii cu produse păstrate; prima: ' + top.name + ', ' + f.lei(top.paid_kept_bani) + ' (' + f.pct(top.paid_kept_bani, P.spent_bani) + ' din cât ai cheltuit).';
         case 'evidentiate':
           return Object.keys(D.highlights).map(function (name) {
             var t = D.highlights[name].totals;
-            return name + ': ' + f.units(t.kept_units) + ' păstrate, ' + f.lei(t.kept_bani);
+            return name + ': ' + f.units(t.kept_units) + ' păstrate, ' + f.lei(t.paid_kept_bani) + ' plătit';
           }).join('; ') + '.';
         case 'ani':
           var years = D.by_year;
-          var best = years.reduce(function (a, b) { return b.kept_bani > a.kept_bani ? b : a; }, years[0]);
-          return years.length + ' ani, de la ' + years[0].year + ' la ' + years[years.length - 1].year + '; cel mai mare: ' + best.year + ', ' + f.lei(best.kept_bani) + ' păstrat.';
+          var best = years.reduce(function (a, b) { return b.spent_bani > a.spent_bani ? b : a; }, years[0]);
+          return years.length + ' ani, de la ' + years[0].year + ' la ' + years[years.length - 1].year + '; cel mai mare: ' + best.year + ', ' + f.lei(best.spent_bani) + ' plătit.';
         case 'mari':
           var B = D.big;
           return f.int(B.items.length) + ' linii peste ' + f.leiInt(B.threshold_bani) + ' pe bucată: ' + f.units(B.kept_units) + ' păstrate, ' + f.units(B.returned_units) + ' returnate, ' + f.units(B.cancelled_units) + ' anulate.';
         case 'top':
           var p = D.top_products[0];
-          return 'primul produs: ' + p.name + ', ' + f.lei(p.bani) + ' (' + f.units(p.units) + ').';
+          return 'primul produs: ' + p.name + ', ' + f.lei(p.paid_bani) + ' plătit (' + f.units(p.units) + ').';
         case 'preturi':
           var S = D.price_history.summary;
           return f.int(S.products) + ' produse păstrate din cel puțin două comenzi; plătit peste cel mai mic preț: ' + f.lei(S.overpaid_vs_min_bani) + '; ultimul preț e mai mare la ' + f.int(S.last_vs_prev.pricier_products) + ' produse și mai mic la ' + f.int(S.last_vs_prev.cheaper_products) + '.';
         case 'vanzatori':
           var s = D.by_seller[0];
-          return f.int(D.by_seller.length) + ' vânzători; primul: ' + s.seller + ', ' + f.lei(s.bani) + '.';
+          return f.int(D.by_seller.length) + ' vânzători; primul: ' + s.seller + ', ' + f.lei(s.paid_bani) + '.';
         case 'excluse':
           return f.int(D.paid_only.length) + ' bloc(uri) plătite fără livrare și ' + f.int(D.in_progress.length) + ' încă în curs.';
         case 'control':
-          var R = D.reconciliation;
-          return 'total plătit ' + f.lei(R.paid_delivered_bani) + ' (vouchere ' + f.lei(R.vouchers_delivered_bani) + ', transport ' + f.lei(R.shipping_delivered_bani) + ', servicii ' + f.lei(R.services_delivered_bani) + '); ' + f.int(R.returns_total) + ' retururi, ' + f.int(R.returns_completed) + ' finalizate; ' + (D.warnings_detail ? f.int(D.warnings_detail.length) + ' grupe de avertismente.' : f.int(D.warnings.length) + ' avertismente.');
+          var R = D.reconciliation, C = P.reconciliation;
+          return 'total plătit ' + f.lei(C.paid_delivered_bani) + ' − primit înapoi ' + f.lei(C.cash_refunds_bani) + (C.credit_returns_added_bani ? ' + retururi cu voucher ' + f.lei(C.credit_returns_added_bani) : '') + ' = ' + f.lei(C.spent_bani) + '; ' + f.int(R.returns_total) + ' retururi, ' + f.int(R.returns_completed) + ' finalizate; ' + (D.warnings_detail ? f.int(D.warnings_detail.length) + ' grupe de avertismente.' : f.int(D.warnings.length) + ' avertismente.');
         default:
           return null;
       }

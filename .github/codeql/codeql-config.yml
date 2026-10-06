@@ -1,0 +1,6 @@
+# Configurația CodeQL a proiectului (o citește .github/workflows/codeql.yml).
+# Analiza acoperă codul care ajunge la utilizatori: emag_spend/, ruleaza.py, interfata/.
+# tests/ e exclus intenționat: testele construiesc date ostile, servere false și aserțiuni de tip
+# "python.org" in output, pe care CodeQL le raportează ca riscuri, deși nu rulează niciodată la utilizatori.
+paths-ignore:
+  - tests

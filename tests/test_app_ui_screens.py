@@ -517,13 +517,14 @@ def test_a_session_deletion_error_is_shown_in_the_panel(open_page, fake):
 
 
 def test_history_lists_the_runs_and_marks_demo_and_missing_reports(open_page, fake):
-    """Rulările: data, „Demo”, număr de comenzi, cât ai păstrat; „Deschide” doar unde există raport."""
+    """Rulările: data, „Demo”, număr de comenzi, cât ai plătit (sau, la o analiză veche, cât ai păstrat); „Deschide” doar unde există raport."""
     page, _ = open_page()
     rows = page.locator("#hist-list li")
     assert rows.count() == 3
     first = rows.nth(0).inner_text()
-    assert "5 oct. 2026, 11:07" in first and "DEMO" in first.upper() and "177 de comenzi" in first and "păstrat: 12.345,67\xa0Lei" in first
-    assert "25 de comenzi" in rows.nth(1).inner_text() and "987,65\xa0Lei" in rows.nth(1).inner_text()
+    assert "5 oct. 2026, 11:07" in first and "DEMO" in first.upper() and "177 de comenzi" in first and "plătit: 12.000,00\xa0Lei" in first
+    assert "păstrat:" not in first, "o analiză nouă arată banii plătiți, nu valoarea de listă"
+    assert "25 de comenzi" in rows.nth(1).inner_text() and "păstrat: 987,65\xa0Lei" in rows.nth(1).inner_text()  # analiză veche, fără spent_bani
     assert "fără raport" in rows.nth(2).inner_text() and rows.nth(2).locator("button").count() == 0
     assert page.inner_text("#hist-status") == "3 rulări, cele mai noi primele."
 

@@ -1,6 +1,7 @@
 """Deschide un browser cu sesiunea ta eMAG și așteaptă să fii logat.
 
 Primește: setările (profil, browser, timp de așteptare) și, opțional, un raportor de progres (progress.py). Dă înapoi: contextul Playwright logat (pentru celelalte module).
+Browserul: cel ales cu EMAG_BROWSER_CHANNEL sau, implicit, primul instalat dintre Edge, Chrome și Chromium-ul descărcat de lansatoare (pe Windows, macOS și Linux).
 Login-ul îl faci TU, manual, în fereastra deschisă: parola și codul 2FA nu trec prin acest program, care NU tastează și NU apasă nimic în paginile eMAG. Singura adresă pe care o deschide programul aici e settings.BASE_URL (istoricul de comenzi).
 Sesiunea rămâne în folderul profilului (.profil_browser), deci la rulările următoare nu mai e nevoie de login cât timp eMAG n-o expiră. La anulare sau la orice eroare browserul se închide prin `finally`.
 Nu citește comenzi și nu calculează nimic."""
@@ -28,6 +29,75 @@ class BrowserLaunchFailed(PlaywrightError):
     E tot o eroare Playwright, cu exact același mesaj: linia de comandă o tratează ca înainte, iar aplicația locală
     știe că eșecul a venit de la pornire (nu de la o pagină închisă de utilizator în timpul rulării) și îl poate explica.
     """
+
+
+class NoBrowserFound(BrowserLaunchFailed):
+    """Niciunul dintre browserele încercate nu e instalat (Edge, Chrome sau Chromium-ul descărcat de lansator)."""
+
+
+# Fragmente (cu litere mici) din mesajele Playwright care înseamnă „browserul acesta nu e instalat”: atunci se încearcă
+# următorul. Orice altă eroare (profil deja deschis, biblioteci de sistem lipsă pe Linux) se raportează imediat.
+MISSING_BROWSER_MARKERS = ("is not found at", "executable doesn't exist", "playwright install")
+
+
+def browser_candidates() -> tuple[str, ...]:
+    """Browserele de încercat, în ordine: cel ales cu EMAG_BROWSER_CHANNEL sau, implicit, settings.AUTO_BROWSER_CHANNELS."""
+    return (settings.BROWSER_CHANNEL,) if settings.BROWSER_CHANNEL else settings.AUTO_BROWSER_CHANNELS
+
+
+def launch_options(channel: str) -> dict:
+    """Argumentele Playwright pentru `channel`; „chromium” înseamnă browserul descărcat de Playwright, adică fără channel."""
+    return {} if channel == settings.DOWNLOADED_BROWSER else {"channel": channel}
+
+
+def is_missing_browser_error(error: BaseException) -> bool:
+    """True dacă eroarea spune doar că browserul încercat nu e instalat (merită încercat următorul)."""
+    text = str(error).lower()
+    return any(marker in text for marker in MISSING_BROWSER_MARKERS)
+
+
+async def launch_first_available(chromium, profile_dir, candidates: tuple[str, ...] | None = None):
+    """Pornește cu profilul `profile_dir` primul browser instalat din `candidates`; întoarce (context, browser).
+
+    `chromium` e `playwright.chromium`. Ridică NoBrowserFound dacă nu e instalat niciunul și BrowserLaunchFailed
+    (cu mesajul Playwright) la orice altă eroare de pornire, de exemplu profilul deschis deja în altă fereastră.
+    """
+    tried = []
+    for channel in candidates or browser_candidates():
+        try:
+            context = await chromium.launch_persistent_context(
+                str(profile_dir), headless=False, no_viewport=True, **launch_options(channel)
+            )
+        except PlaywrightError as error:
+            if not is_missing_browser_error(error):
+                raise BrowserLaunchFailed(str(error)) from error
+            tried.append(channel)
+            continue
+        logger.info("browser folosit: %s", channel)
+        return context, channel
+    raise NoBrowserFound(f"nu găsesc niciun browser instalat dintre: {', '.join(tried)}")
+
+
+def find_usable_browser(candidates: tuple[str, ...] | None = None) -> str | None:
+    """Primul browser din `candidates` care pornește (fără fereastră, fără pagini), sau None. Îl folosesc lansatoarele.
+
+    Aici orice eroare înseamnă „nu se poate folosi” (pe Linux, Chromium-ul descărcat pornește doar cu bibliotecile de sistem
+    necesare): motivul ultimei încercări se scrie în jurnal, ca utilizatorul să afle ce lipsește.
+    """
+    from playwright.sync_api import Error as SyncPlaywrightError
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        for channel in candidates or browser_candidates():
+            try:
+                browser = playwright.chromium.launch(headless=True, **launch_options(channel))
+            except SyncPlaywrightError as error:
+                if not is_missing_browser_error(error):
+                    logger.warning("browserul %s există, dar nu pornește: %s", channel, str(error).splitlines()[0])
+                continue
+            browser.close()
+            return channel
+    return None
 
 
 async def _is_logged_in(page) -> bool:
@@ -88,15 +158,7 @@ async def logged_in_browser(progress: Progress = NO_PROGRESS):
 
     settings.PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     async with async_playwright() as playwright:
-        try:
-            context = await playwright.chromium.launch_persistent_context(
-                str(settings.PROFILE_DIR),
-                channel=settings.BROWSER_CHANNEL,
-                headless=False,
-                no_viewport=True,
-            )
-        except PlaywrightError as error:
-            raise BrowserLaunchFailed(str(error)) from error
+        context, _ = await launch_first_available(playwright.chromium, settings.PROFILE_DIR)
         try:
             page = context.pages[0] if context.pages else await context.new_page()
             await ensure_logged_in(page, progress=progress)

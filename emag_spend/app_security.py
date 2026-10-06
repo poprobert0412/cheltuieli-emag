@@ -184,3 +184,14 @@ def download_content_type(name: object) -> str | None:
 def security_headers() -> dict[str, str]:
     """O copie nouă a antetelor de securitate (cine o primește o poate completa fără să strice constanta)."""
     return dict(SECURITY_HEADERS)
+
+
+# Cât dintr-o valoare venită din cerere (metodă, cale) intră în jurnal: destul ca s-o recunoști, nu cât să umple fișierul.
+LOG_VALUE_LIMIT = 120
+
+
+def loggable(value: object, limit: int = LOG_VALUE_LIMIT) -> str:
+    """`value` ca text sigur pentru un singur rând de jurnal: fără CR/LF (nu se pot falsifica rânduri), caracterele
+    de control înlocuite cu „?”, tăiat la `limit` caractere. Pentru tot ce vine din cerere: cale, metodă, antete."""
+    text = str(value).replace("\r", "").replace("\n", "")
+    return "".join(ch if ch.isprintable() else "?" for ch in text)[:limit]

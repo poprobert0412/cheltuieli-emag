@@ -2,7 +2,8 @@
 
 Primește: calea fișierului, liniile de registru și pragul pentru „achiziție mare”. Dă înapoi: nimic (scrie
 fișierul; separator `;`, zecimale cu virgulă, UTF-8 cu BOM). Coloana `link_comanda` = adresa comenzii pe eMAG
-(doar pentru numere valide, order_links.py). Celulele de TEXT vin din pagini controlate de vânzători: dacă încep
+(doar pentru numere valide, order_links.py); `platit_linie_lei` / `platit_pastrat_lei` = sumele plătite, după partea
+produsului din reducerile blocului (lângă cele la preț de listă). Celulele de TEXT vin din pagini controlate de vânzători: dacă încep
 cu `= + - @` sau tab/CR, Excel le-ar evalua ca formulă (CSV injection), deci `text_cell` pune un apostrof în față;
 sumele generate de program (și cele negative) nu se ating. `text_cell` și `lei_cell` le folosește și price_history_csv.py.
 """
@@ -15,7 +16,7 @@ from emag_spend.order_links import order_url
 
 _HEADER = [
     "comanda", "link_comanda", "data", "an", "vanzator", "produs", "categorie", "regula_categorie",
-    "cantitate", "valoare_linie_lei", "pastrat_lei", "returnat_lei", "anulat_lei", "in_curs_lei",
+    "cantitate", "valoare_linie_lei", "platit_linie_lei", "pastrat_lei", "platit_pastrat_lei", "returnat_lei", "anulat_lei", "in_curs_lei",
     "bucati_pastrate", "bucati_returnate", "bucati_anulate", "bucati_in_curs",
     "status_bloc", "retur_id", "peste_prag",
 ]
@@ -63,7 +64,9 @@ def write_lines_csv(path: Path, lines: list[LineOutcome], threshold_bani: int) -
                 text_cell(line.rule),
                 line.qty,
                 lei_cell(line.line_total_bani),
+                lei_cell(line.paid_value_bani),
                 lei_cell(line.kept_bani),
+                lei_cell(line.kept_paid_bani),
                 lei_cell(line.returned_bani),
                 lei_cell(line.cancelled_bani),
                 lei_cell(line.pending_bani),

@@ -1,6 +1,6 @@
 /* site-simulator.js — simulatorul „Cum se calculează”: comenzi inventate, stări comutabile, lanț recalculat live.
  * Primește: nimic din afară, în afară de pragul implicit din datele demo (window.EMAG_DEMO_DATA.big.threshold_bani).
- * Dă înapoi: nimic; desenează comenzile, lanțul comandat → păstrat și regula activă într-un panou aria-live.
+ * Dă înapoi: nimic; desenează comenzile, lanțul comandat → plătit și regula activă într-un panou aria-live.
  * Starea unei comenzi NU e o etichetă ținută în JS: se alege ce afișează eMAG (text de status, pași de retur),
  * iar rezultatul se deduce cu aceleași reguli ca programul (oglindă a emag_spend/block_status.py și
  * return_matcher.py). Dacă acele reguli se schimbă în Python, actualizează STATUS_RULES de aici;
@@ -24,6 +24,8 @@
     ['comanda plasata', 'IN_PROGRESS'],
     ['predate curierului', 'IN_PROGRESS'],
     ['in drum spre', 'IN_PROGRESS'],
+    ['ajunse in', 'IN_PROGRESS'],
+    ['ajunse la', 'IN_PROGRESS'],
     ['in curs de', 'IN_PROGRESS'],
     ['in pregatire', 'IN_PROGRESS'],
     ['pregatit', 'IN_PROGRESS'],
@@ -50,7 +52,7 @@
     returned: { rule: 'Returul e finalizat: pasul „Restituire sumă” are dată. Câte o unitate din „păstrat”, pentru fiecare apariție a numelui în retur, trece în „returnat”, iar suma ei se scade din total.', where: 'emag_spend/return_parser.py (completed) și return_matcher.py (apply_returns)' },
     requested: { rule: 'Cererea de retur există, dar pasul „Restituire sumă” nu are dată: returul nu e finalizat, deci produsul rămâne păstrat. Raportul avertizează: „N retururi cu cerere înregistrată dar fără rezultat…”.', where: 'emag_spend/return_parser.py (doar pașii cu dată contează) și spend_analysis.py (avertisment)' },
     cancelled: { rule: 'Statusul conține „Livrare anulată” și nu există retur finalizat: produsul e anulat. Fraza „Livrare anulată” are prioritate față de orice altă frază din bloc.', where: 'emag_spend/block_status.py (prima regulă din _RULES)' },
-    pending: { rule: 'Statusul spune că produsul n-a ajuns încă (plasată, predată curierului, în drum…): e „în curs” și nu se numără ca păstrat până nu apare „Produse livrate” sau „Produse ridicate”.', where: 'emag_spend/block_status.py (regulile IN_PROGRESS)' },
+    pending: { rule: 'Statusul spune că produsul n-a ajuns încă la tine (plasată, predată curierului, în drum, ajunsă la punctul de ridicare dar încă neridicată…): e „în curs” și nu se numără ca păstrat până nu apare „Produse livrate” sau „Produse ridicate”.', where: 'emag_spend/block_status.py (regulile IN_PROGRESS)' },
     marketplace: { rule: 'La vânzătorii din marketplace, eMAG arată „Livrare anulată” și pentru un produs returnat. Fiindcă există retur finalizat, unitățile „anulate” (câte una pentru fiecare apariție a numelui în retur) devin „returnate”: nu se numără ca anulare și nu se scad de două ori.', where: 'emag_spend/return_matcher.py (returned_from_cancelled_qty)' },
     unknown: { rule: 'Textul de status nu se potrivește cu nicio frază cunoscută: starea e „necunoscut”. Produsul NU e numărat ca livrat; stă separat în lanț și apare avertismentul „status necunoscut la comanda …”.', where: 'emag_spend/block_status.py (UNKNOWN) și spend_analysis.py (avertisment)' }
   };
@@ -64,9 +66,10 @@
     { id: 'D-05', seller: 'eMAG', name: 'Monitor Aurel 27 inch', unit: 129900, qty: 1, initial: 'pending' },
     { id: 'D-06', seller: 'eMAG', name: 'Rucsac Sendero 30 L', unit: 21900, qty: 1, initial: 'requested' }
   ];
+  // Eticheta totalului e scurtă („= Plătit”, ca pe bonul din hero): „Plătit efectiv” ar rupe rândul în două la lățimi obișnuite.
   var CHAIN_ROWS = [
     ['ordered', 'Comandat în total', ''], ['cancelled', 'Anulat', '− '], ['returned', 'Returnat', '− '],
-    ['pending', 'În curs', '− '], ['unknown', 'Necunoscut', '− '], ['kept', 'Păstrat', '= ']
+    ['pending', 'În curs', '− '], ['unknown', 'Necunoscut', '− '], ['kept', 'Plătit', '= ']
   ];
 
   var state = {}; // id comandă -> id scenariu ales
@@ -244,16 +247,17 @@
       if (sums[key].bani > 0) bar.appendChild(h('i', { class: 'ticket__seg ticket__seg--' + key, style: 'flex-grow:' + sums[key].bani }));
     });
     Site.dom.clear(els.chain).appendChild(h('div', null,
-      h('h3', { class: 'chain__title', id: 'sim-chain-t' }, 'Lanțul comandat → păstrat'),
+      h('h3', { class: 'chain__title', id: 'sim-chain-t' }, 'Lanțul comandat → plătit'),
       list,
       h('p', { class: 'chain__units' }, Site.fmt.units(sums.kept.units) + ' păstrate din ' + Site.fmt.units(sums.ordered.units) + ' comandate'),
       bar,
       h('p', { class: 'chain__check' + (closes ? '' : ' is-bad') }, closes
-        ? 'Verificare: comandat = anulat + returnat + în curs' + (sums.unknown.bani > 0 ? ' + necunoscut' : '') + ' + păstrat.'
+        ? 'Verificare: comandat = anulat + returnat + în curs' + (sums.unknown.bani > 0 ? ' + necunoscut' : '') + ' + plătit efectiv.'
         : 'Verificare eșuată: părțile nu se adună la total.'),
-      h('p', { class: 'chain__big' }, 'Produse peste prag: ', h('b', null, Site.fmt.int(data.big.count)), ' (strict peste ' + Site.fmt.leiInt(data.limit) + ' pe bucată).')));
+      h('p', { class: 'chain__big' }, 'Produse peste prag: ', h('b', null, Site.fmt.int(data.big.count)), ' (strict peste ' + Site.fmt.leiInt(data.limit) + ' pe bucată).'),
+      h('p', { class: 'chain__units' }, 'Comenzile din exemplu nu au vouchere, transport sau taxe, deci suma plătită e chiar prețul lor.')));
     els.mini.textContent = '';
-    els.mini.appendChild(h('span', { class: 'sim__mini-val' }, 'Păstrat ' + Site.fmt.lei(sums.kept.bani)));
+    els.mini.appendChild(h('span', { class: 'sim__mini-val' }, 'Plătit ' + Site.fmt.lei(sums.kept.bani)));
     var miniBar = h('span', { class: 'chain__bar chain__bar--mini' });
     ['kept', 'returned', 'cancelled', 'pending', 'unknown'].forEach(function (key) {
       if (sums[key].bani > 0) miniBar.appendChild(h('i', { class: 'ticket__seg ticket__seg--' + key, style: 'flex-grow:' + sums[key].bani }));

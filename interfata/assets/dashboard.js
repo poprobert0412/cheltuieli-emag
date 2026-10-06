@@ -1,14 +1,16 @@
 /* =============================================================================
    dashboard.js — componenta „Raport cheltuieli eMAG” (window.EmagDashboard).
    Ce face: validează analiza.json (schema din emag_spend/spend_analysis.py) și
-   desenează raportul într-un element: cifra mare, lanțul comandat -> păstrat,
+   desenează raportul într-un element: cifra mare (banii plătiți efectiv), lanțul comandat -> plătit,
    categorii, grafic pe ani, achiziții mari, prețuri la același produs, vânzători, control (cu
    avertismentele pe grupe), metodă. Fiecare număr de comandă afișat e un link spre pagina ei de pe eMAG,
    construit doar din numere validate strict (vezi ORDER_URL_PREFIX); linkul se deschide la clic, în filă nouă.
+   La fel numele fiecărui produs din tabele (productLink): duce la comanda lui (la un rând cu mai multe comenzi,
+   la cea mai recentă), se face albastru la hover și la focus, iar în date de demonstrație rămâne text.
    Ce primește: mount(root, data, options) cu options = { demo?: boolean,
    headingLevel?: 1-5 (implicit 2: titlurile blocurilor sunt h2, cele din ele h3) }.
-   Cheile `price_history` și `warnings_detail` din analiza.json sunt OPȚIONALE: un fișier vechi, fără ele,
-   se desenează ca înainte (fără blocul de prețuri, cu lista simplă de avertismente).
+   Cheile `paid`, `price_history` și `warnings_detail` din analiza.json sunt OPȚIONALE: un fișier vechi, fără ele,
+   se desenează ca înainte (la preț de listă, fără blocul de prețuri, cu lista simplă de avertismente).
    Listele și tabelele lungi se desenează câte ROWS_PAGE rânduri („Arată încă”); tabelele cu
    clasa ed-tbl-cards devin liste de carduri pe lățime mică (le comută dashboard.css, nu JavaScript).
    Listele-bară sunt UN singur punct de oprire Tab, cu săgeți între rânduri (rovingFocus).
@@ -179,6 +181,21 @@
   const FUNNEL_PARTS = ['ordered', 'cancelled', 'returned', 'pending', 'unknown', 'kept'];
   const CATEGORY_TOTALS = ['ordered_bani', 'ordered_units', 'kept_bani', 'kept_units', 'returned_bani', 'returned_units',
     'cancelled_bani', 'cancelled_units', 'pending_bani'];
+  // Sumele plătite (după partea produsului din reducerile blocului) de pe rânduri; vin împreună cu cheia `paid`.
+  const PAID_CATEGORY = ['paid_ordered_bani', 'paid_kept_bani', 'paid_returned_bani', 'paid_cancelled_bani', 'paid_pending_bani'];
+  const PAID_YEAR = ['paid_ordered_bani', 'paid_returned_bani', 'paid_cancelled_bani', 'paid_pending_bani', 'paid_unknown_bani', 'paid_fees_bani', 'spent_bani'];
+  const YEAR_MATRIX = obj({ years: list(STR), series: list(STR), values: map(map(INT)) });
+  // `paid` (emag_spend/paid_totals.py): cifra mare, lanțul în bani plătiți, rândurile care nu sunt produse și reconcilierea.
+  const PAID = obj(Object.assign(ints(['spent_bani', 'spent_units', 'list_kept_bani', 'discounts_kept_bani', 'products_kept_bani', 'fees_bani',
+    'credit_returns_bani', 'credit_returns_units', 'refund_differences_bani']), {
+    extra_rows: list(obj({ key: STR, name: STR, bani: INT })),
+    funnel: obj(ints(['ordered_bani', 'cancelled_bani', 'returned_bani', 'pending_bani', 'unknown_bani', 'fees_bani', 'spent_bani',
+      'ordered_units', 'cancelled_units', 'returned_units', 'credit_units', 'pending_units', 'unknown_units', 'spent_units'])),
+    by_year_category: YEAR_MATRIX,
+    reconciliation: obj(ints(['paid_delivered_bani', 'rebuilt_blocks', 'rebuilt_bani', 'cash_refunds_bani', 'estimated_refunds_bani', 'estimated_refunds',
+      'credit_returns_delivered_bani', 'credit_returns_added_bani', 'refund_differences_bani', 'spent_bani', 'in_progress_bani', 'paid_only_bani',
+      'unknown_bani', 'cancelled_cash_returns_bani', 'cancelled_cash_refunds_shown_bani', 'unattributed_refunds_bani'])),
+  }));
   const EXCLUDED_ROW = obj({
     order_id: STR, date: STR, seller: STR, names: list(STR), products_bani: INT, paid_bani: INT, status_text: STR,
   }, ['products_bani', 'status_text']);
@@ -208,22 +225,24 @@
   const SCHEMA = obj({
     meta: obj({ generated_at: STR, threshold_bani: INT, first_order: STR_NULL, last_order: STR_NULL, orders: INT, blocks: INT, lines: INT }),
     funnel: obj(ints([].concat(...FUNNEL_PARTS.map((p) => [p + '_bani', p + '_units'])))),
+    paid: PAID,
     orders: obj(ints(['total', 'kept_all', 'kept_partial', 'returned_all', 'cancelled_all', 'in_progress', 'paid_only', 'unknown', 'no_items'])),
-    by_category: list(obj(Object.assign({ name: STR }, ints(CATEGORY_TOTALS)))),
-    by_year: list(obj(Object.assign({ year: STR }, ints(['orders', 'orders_with_kept', 'ordered_bani', 'kept_bani', 'kept_units', 'returned_bani', 'cancelled_bani'])))),
-    by_year_category: obj({ years: list(STR), series: list(STR), values: map(map(INT)) }),
-    top_products: list(obj({ name: STR, category: STR, units: INT, bani: INT })),
-    by_seller: list(obj({ seller: STR, units: INT, bani: INT })),
+    by_category: list(obj(Object.assign({ name: STR }, ints(CATEGORY_TOTALS), ints(PAID_CATEGORY)), PAID_CATEGORY)),
+    by_year: list(obj(Object.assign({ year: STR }, ints(['orders', 'orders_with_kept', 'ordered_bani', 'kept_bani', 'kept_units', 'returned_bani', 'cancelled_bani']),
+      ints(PAID_YEAR)), PAID_YEAR)),
+    by_year_category: YEAR_MATRIX,
+    top_products: list(obj({ name: STR, category: STR, units: INT, bani: INT, paid_bani: INT, order_id: STR, order_count: INT }, ['paid_bani', 'order_id', 'order_count'])),
+    by_seller: list(obj({ seller: STR, units: INT, bani: INT, paid_bani: INT }, ['paid_bani'])),
     big: obj(Object.assign({
       threshold_bani: INT,
       items: list(obj({
-        order_id: STR, date: STR, name: STR, seller: STR, category: STR, qty: INT, unit_bani: INT, amount_bani: INT, state: STR,
+        order_id: STR, date: STR, name: STR, seller: STR, category: STR, qty: INT, unit_bani: INT, amount_bani: INT, paid_amount_bani: INT, state: STR,
         returned_from_cancelled: 'bool',
-      }, ['returned_from_cancelled'])),
-    }, ints([].concat(...STATES.map((s) => [s + '_bani', s + '_units']))))),
+      }, ['returned_from_cancelled', 'paid_amount_bani'])),
+    }, ints([].concat(...STATES.map((s) => [s + '_bani', s + '_units']))), ints(STATES.map((s) => s + '_paid_bani'))), STATES.map((s) => s + '_paid_bani')),
     highlights: map(obj({
-      totals: obj(Object.assign({ name: STR }, ints(CATEGORY_TOTALS)), ['name']),
-      items: list(obj({ order_id: STR, date: STR, name: STR, qty: INT, amount_bani: INT, state: STR })),
+      totals: obj(Object.assign({ name: STR }, ints(CATEGORY_TOTALS), ints(PAID_CATEGORY)), ['name'].concat(PAID_CATEGORY)),
+      items: list(obj({ order_id: STR, date: STR, name: STR, qty: INT, amount_bani: INT, paid_amount_bani: INT, state: STR }, ['paid_amount_bani'])),
       items_total: INT,
     }, ['items_total'])),
     paid_only: list(EXCLUDED_ROW),
@@ -234,12 +253,21 @@
     ]), { refund_modes: map(INT), header_total_mismatches: list(null), orders_with_storno: list(STR) }),
     ['refunds_without_amount', 'refund_modes', 'header_total_mismatches']),
     returns: obj({ matched_units: INT, matched_from_cancelled_units: INT, unmatched_refund_bani: INT }, ['unmatched_refund_bani']),
-    uncategorized: list(obj({ name: STR, units: INT, bani: INT })),
+    uncategorized: list(obj({ name: STR, units: INT, bani: INT, order_id: STR, order_count: INT }, ['order_id', 'order_count'])),
     uncategorized_count: INT,
     price_history: PRICE_HISTORY,
     warnings: list(STR),
     warnings_detail: list(WARNING_GROUP),
-  }, ['highlights', 'paid_only', 'in_progress', 'uncategorized', 'uncategorized_count', 'price_history', 'warnings_detail']);
+  }, ['paid', 'highlights', 'paid_only', 'in_progress', 'uncategorized', 'uncategorized_count', 'price_history', 'warnings_detail']);
+  // Cu `paid`, sumele plătite de pe rânduri devin obligatorii: un fișier amestecat (rânduri fără ele) ar afișa sume de listă drept plătite.
+  const PAID_ROWS = obj({
+    by_category: list(obj(ints(PAID_CATEGORY))),
+    by_year: list(obj(ints(PAID_YEAR))),
+    top_products: list(obj({ paid_bani: INT })),
+    by_seller: list(obj({ paid_bani: INT })),
+    big: obj(Object.assign({ items: list(obj({ paid_amount_bani: INT })) }, ints(STATES.map((s) => s + '_paid_bani')))),
+    highlights: map(obj({ totals: obj(ints(PAID_CATEGORY)), items: list(obj({ paid_amount_bani: INT })) })),
+  }, ['highlights']);
 
   const KIND_TEXT = { int: 'un număr întreg', str: 'text', 'str?': 'text sau null', 'num?': 'un număr sau null', bool: 'adevărat sau fals', list: 'o listă', obj: 'un obiect' };
   const FILE_HINT = 'Încarcă fișierul analiza.json din folderul iesiri\\<data>_<ora>\\ al unei rulări.';
@@ -319,6 +347,7 @@
       }
       const ctx = { problems: [], missing: [] };
       walk(data, SCHEMA, '', ctx);
+      if (!ctx.problems.length && !ctx.missing.length && isPlain(data.paid)) walk(data, PAID_ROWS, '', ctx);
       const errors = [];
       const topMissing = ctx.missing.filter((k) => k.indexOf('.') < 0);
       const nestedMissing = ctx.missing.filter((k) => k.indexOf('.') >= 0);
@@ -333,12 +362,12 @@
       });
       byParent.forEach((keys, parent) => { errors.push(parent + ': ' + missingMessage(keys, false)); });
       ctx.problems.forEach((p) => errors.push(p));
-      const yc = data.by_year_category;
-      if (!errors.length && isPlain(yc)) {
+      [['by_year_category', data.by_year_category], ['paid.by_year_category', isPlain(data.paid) ? data.paid.by_year_category : null]].forEach(([name, yc]) => {
+        if (errors.length || !isPlain(yc)) return;
         yc.years.forEach((y) => {
-          if (!hasOwn(yc.values, y)) errors.push('by_year_category.values nu are anul „' + clip(y, 12) + '” din by_year_category.years.');
+          if (!hasOwn(yc.values, y)) errors.push(name + '.values nu are anul „' + clip(y, 12) + '” din ' + name + '.years.');
         });
-      }
+      });
       if (errors.length > ERRORS_SHOWN) {
         const extra = errors.length - ERRORS_SHOWN;
         errors.length = ERRORS_SHOWN;
@@ -438,6 +467,21 @@
     return valid === null ? text : emagLink(valid, 'Deschide returul ' + returnId + ' pe eMAG (filă nouă)', text);
   }
   /**
+   * Numele unui produs ca link spre comanda lui pe eMAG, cu aceleași reguli ca numărul comenzii: doar dintr-un număr valid,
+   * în filă nouă, fără legătură cu fereastra noastră, și niciodată în date de demonstrație (`plain === true`). Textul vizibil
+   * rămâne numele (stilul de link apare la hover și la focus, vezi .ed-plink); eticheta pentru cititoarele de ecran începe cu
+   * numele și spune ce comandă se deschide: la un rând care adună `orderCount` > 1 comenzi, pe cea mai recentă.
+   * Fără număr valid, numele rămâne text, trecut prin rich() ca orice text din date.
+   */
+  function productLink(name, orderId, orderCount, plain) {
+    const text = typeof name === 'string' ? name : '';
+    const url = plain === true ? null : orderUrl(orderId);
+    if (url === null) return rich(text);
+    const latest = typeof orderCount === 'number' && orderCount > 1 ? ' (cea mai recentă din ' + int(orderCount) + ')' : '';
+    return h('a', Object.assign({ class: 'ed-plink', href: url, 'aria-label': text + ': Deschide comanda ' + orderId + ' pe eMAG' + latest + ', în filă nouă' },
+      LINK_ATTRS), rich(text));
+  }
+  /**
    * Celula „Data și comanda”: data pe primul rând, linkul comenzii pe al doilea. Împreună într-o singură coloană, ca tabelele
    * late („Achiziții peste prag” are 8 coloane) să nu primească încă una și să nu iasă din chenar la 1280 px.
    */
@@ -471,8 +515,19 @@
       uncategorized_count: typeof d.uncategorized_count === 'number' ? d.uncategorized_count : (d.uncategorized || []).length,
       price_history: d.price_history || null, // lipsa cheii = raport vechi: blocul de prețuri nu se desenează
       warnings_detail: d.warnings_detail || null, // lipsa cheii = lista simplă de texte
+      paid: isPlain(d.paid) ? d.paid : null, // lipsa cheii = raport vechi: sumele se arată la preț de listă, ca înainte
     };
   }
+
+  /** Semnul și suma, pentru descompunerea cifrei mari: „+1.231,15 Lei”, „−5,56 Lei”. */
+  const signedLei = (bani) => (num(bani) < 0 ? MINUS : '+') + lei(Math.abs(num(bani)));
+
+  // Ce înseamnă fiecare rând care nu e produs (cheia `key` din paid.extra_rows): explicația din tooltip și din nota de sub bare.
+  const EXTRA_ROW_NOTES = {
+    fees: 'transportul, serviciile și taxele comenzilor livrate; nu se împart pe produse',
+    credit_returns: 'produse returnate cu voucher sau sold eMAG: banii nu s-au întors în cont, iar voucherul scade „Total plătit” al comenzii în care îl folosești',
+    refund_differences: 'partea plătită a produselor returnate minus suma restituită afișată la retur',
+  };
 
   /**
    * Micro-diagramă SVG a prețului pe bucată la fiecare cumpărare (de la cea mai veche la cea mai nouă). Orizontal,
@@ -744,7 +799,8 @@
     /**
      * Listă de bare orizontale (categorii, vânzători): fiecare rând are tooltip, iar lista întreagă e UN
      * singur punct de oprire Tab (rovingFocus). Lățimea barelor se raportează la maximul tuturor
-     * rândurilor, nu al paginii curente, ca „Arată încă” să nu schimbe scara.
+     * rândurilor, nu al paginii curente, ca „Arată încă” să nu schimbe scara. Un rând fără `units` (de ex.
+     * „Transport și taxe”) nu arată bucăți, iar cu `extra: true` bara lui are culoarea rândurilor care nu sunt produse.
      */
     function barList(items, total) {
       const max = items.reduce((m, i) => Math.max(m, i.bani), 1);
@@ -752,12 +808,13 @@
         const ul = h('ul', { class: 'ed-bars', role: 'list' }); // role explicit: Safari scoate lista când list-style e none
         const rows = slice.map((i) => {
           const width = Math.max(0, Math.min(100, i.bani / max * 100));
+          const units = typeof i.units === 'number' ? buc(i.units) : null;
           const row = h('li', {
-            class: 'ed-bar-row',
-            'aria-label': i.name + ': ' + lei(i.bani) + ', ' + pct(i.bani, total) + ', ' + buc(i.units),
+            class: 'ed-bar-row' + (i.extra ? ' ed-bar-extra' : ''),
+            'aria-label': i.name + ': ' + lei(i.bani) + ', ' + pct(i.bani, total) + (units ? ', ' + units : ''),
           },
           h('span', { class: 'ed-bar-name' }, rich(i.name)),
-          h('span', { class: 'ed-bar-val' }, h('strong', null, lei(i.bani)), ' ', h('span', { class: 'ed-pct' }, '· ' + pct(i.bani, total) + ' · ' + buc(i.units))),
+          h('span', { class: 'ed-bar-val' }, h('strong', null, lei(i.bani)), ' ', h('span', { class: 'ed-pct' }, '· ' + pct(i.bani, total) + (units ? ' · ' + units : ''))),
           h('span', { class: 'ed-bar-track', 'aria-hidden': 'true' }, h('span', { class: 'ed-bar-fill', style: { width: width.toFixed(2) + '%' } })));
           attachTip(row, i.name, i.tip);
           ul.appendChild(row);
@@ -770,21 +827,42 @@
 
     /* =========================== blocurile raportului =========================== */
 
+    /** Descompunerea cifrei mari: preț de listă, reduceri, transport și taxe și, dacă există, retururile cu credit și diferențele. */
+    function heroParts(P) {
+      const parts = [['La preț de listă', lei(P.list_kept_bani)], ['reduceri', MINUS + lei(Math.abs(num(P.discounts_kept_bani)))],
+        ['transport și taxe', signedLei(P.fees_bani)]];
+      if (P.credit_returns_bani) parts.push(['retururi cu voucher sau sold', signedLei(P.credit_returns_bani)]);
+      if (P.refund_differences_bani) parts.push(['diferențe la restituiri', signedLei(P.refund_differences_bani)]);
+      return h('ul', { class: 'ed-hero-parts', role: 'list', 'aria-label': 'Cum se compune suma' },
+        parts.map((p) => h('li', null, rich(p[0]), ' ', h('span', { class: 'ed-hero-part-v' }, p[1]))));
+    }
+
     function heroBlock(D) {
-      const F = D.funnel, M = D.meta, O = D.orders;
-      const parts = splitMoney(F.kept_bani);
+      const M = D.meta, O = D.orders, P = D.paid;
+      const F = P ? P.funnel : D.funnel;
+      const spent = P ? F.spent_bani : F.kept_bani, units = P ? F.spent_units : F.kept_units;
+      const parts = splitMoney(spent);
       let period = 'Nicio comandă în aceste date.';
       if (M.first_order && M.last_order) period = 'Comenzi din ' + fmtDate(M.first_order) + ' până în ' + fmtDate(M.last_order);
       period += ' · generat ' + fmtDate(M.generated_at, true);
-      const summary = F.ordered_bani <= 0
-        ? 'Nu există produse comandate în aceste date.'
-        : buc(F.kept_units) + ' păstrate din ' + count(O.total, 'comandă', 'comenzi') + '. ' + (F.kept_bani === F.ordered_bani
+      const away = F.cancelled_bani + F.returned_bani + F.pending_bani + F.unknown_bani;
+      let summary = 'Nu există produse comandate în aceste date.';
+      if (F.ordered_bani > 0 && P) {
+        summary = buc(units) + ' păstrate din ' + count(O.total, 'comandă', 'comenzi') + '. ' + (away
+          ? 'Din ' + lei(F.ordered_bani) + ' comandați (după reduceri), ' + lei(away) + ' au fost anulați, returnați cu bani înapoi sau nu au ajuns încă.'
+          : 'Nimic din ce ai comandat nu a fost anulat, returnat cu bani înapoi sau în curs.');
+      } else if (F.ordered_bani > 0) {
+        summary = buc(units) + ' păstrate din ' + count(O.total, 'comandă', 'comenzi') + '. ' + (F.kept_bani === F.ordered_bani
           ? 'Tot ce ai comandat (' + lei(F.ordered_bani) + ') ai păstrat.'
           : 'Din ' + lei(F.ordered_bani) + ' comandați, restul a fost anulat, returnat sau nu a ajuns încă.');
+      }
       return block('hero', 'Cât ai cheltuit', h('div', { class: 'ed-card ed-hero' },
         heading('Cât ai cheltuit', 0, 'ed-eyebrow'),
         h('p', { class: 'ed-amount' }, h('span', { class: 'ed-big' }, parts.whole), h('span', { class: 'ed-cents' }, parts.frac + NBSP + 'Lei')),
-        h('p', { class: 'ed-lead' }, 'Pe produsele livrate și ridicate, fără cele returnate.'),
+        h('p', { class: 'ed-lead' }, P
+          ? 'Banii plătiți efectiv pe ce ai păstrat: după reduceri și vouchere, cu transportul și taxele, minus banii primiți înapoi la retururi.'
+          : 'Pe produsele livrate și ridicate, fără cele returnate, la preț de listă (raport făcut de o versiune mai veche a programului).'),
+        P ? heroParts(P) : null,
         h('p', { class: 'ed-caption' }, summary),
         h('p', { class: 'ed-meta-line' }, period),
         F.unknown_bani > 0
@@ -792,105 +870,166 @@
           : null));
     }
 
+    /**
+     * Lanțul de la comandat la ce ai păstrat. Cu `paid`: în bani plătiți (după reduceri) — comandat − anulat − returnat cu bani
+     * înapoi − în curs + transport și taxe = plătit efectiv; bara împarte totalul (comandat + transport) pe stări. Fără `paid`
+     * (raport vechi): la preț de listă, ca înainte.
+     */
     function funnelBlock(D) {
-      const F = D.funnel;
-      const kept = { key: 'kept', name: 'Păstrat (livrat / ridicat)', bani: F.kept_bani, units: F.kept_units };
+      const P = D.paid;
+      const F = P ? P.funnel : D.funnel;
+      const base = P ? F.ordered_bani + F.fees_bani : F.ordered_bani; // baza procentelor: suma barei
+      const share = P ? ' din total' : ' din comandat';
+      const kept = P
+        ? { key: 'kept', name: 'Plătit efectiv (păstrat)', bani: F.spent_bani, units: F.spent_units }
+        : { key: 'kept', name: 'Păstrat (livrat / ridicat)', bani: F.kept_bani, units: F.kept_units };
       const minus = [
         { key: 'cancelled', name: 'Anulat', bani: F.cancelled_bani, units: F.cancelled_units },
-        { key: 'returned', name: 'Returnat', bani: F.returned_bani, units: F.returned_units },
+        { key: 'returned', name: P ? 'Returnat, bani primiți înapoi' : 'Returnat', bani: F.returned_bani, units: F.returned_units },
         { key: 'pending', name: 'În curs (nelivrat încă)', bani: F.pending_bani, units: F.pending_units },
       ];
       if (F.unknown_bani) minus.push({ key: 'unknown', name: 'Status necunoscut', bani: F.unknown_bani, units: F.unknown_units });
       const barOrder = [kept, minus[1], minus[0], minus[2]].concat(minus.slice(3));
-      const bar = h('div', { class: 'ed-funnel-bar', role: 'group', 'aria-label': 'Împărțirea valorii comandate: păstrat, returnat, anulat, în curs' });
+      const bar = h('div', { class: 'ed-funnel-bar', role: 'group', 'aria-label': P
+        ? 'Împărțirea sumei comandate: plătit efectiv, returnat, anulat, în curs'
+        : 'Împărțirea valorii comandate: păstrat, returnat, anulat, în curs' });
       barOrder.forEach((f) => {
         if (!(f.bani > 0)) return;
         const seg = h('div', {
-          class: 'ed-funnel-seg', tabindex: '0', role: 'img', 'aria-label': f.name + ': ' + lei(f.bani) + ', ' + pct(f.bani, F.ordered_bani) + ' din comandat',
+          class: 'ed-funnel-seg', tabindex: '0', role: 'img', 'aria-label': f.name + ': ' + lei(f.bani) + ', ' + pct(f.bani, base) + share,
           style: { flex: f.bani + ' 1 0', background: stateColor(f.key) },
         });
-        attachTip(seg, f.name, [{ label: 'Valoare', value: lei(f.bani) }, { label: 'Bucăți', value: buc(f.units) }, { label: 'Din comandat', value: pct(f.bani, F.ordered_bani) }]);
+        attachTip(seg, f.name, [{ label: 'Valoare', value: lei(f.bani) }, { label: 'Bucăți', value: buc(f.units) }, { label: P ? 'Din total' : 'Din comandat', value: pct(f.bani, base) }]);
         bar.appendChild(seg);
       });
       const item = (f, prefix, ring, extraClass) => h('div', { class: 'ed-fl-item' + (extraClass ? ' ' + extraClass : '') },
         h('span', { class: 'ed-fl-name' }, h('i', { class: 'ed-sw' + (ring ? ' ed-sw-ring' : ''), 'aria-hidden': 'true', style: { background: f.key ? stateColor(f.key) : 'transparent' } }), f.name),
         h('span', { class: 'ed-fl-val' }, prefix + lei(f.bani)),
-        h('span', { class: 'ed-fl-meta' }, f.meta || (buc(f.units) + ' · ' + pct(f.bani, F.ordered_bani) + ' din comandat')));
+        h('span', { class: 'ed-fl-meta' }, f.meta || (buc(f.units) + ' · ' + pct(f.bani, base) + share)));
+      const ordered = P
+        ? { key: null, name: 'Comandat (după reduceri)', bani: F.ordered_bani, meta: buc(F.ordered_units) + ' · toate comenzile, fără asigurări' }
+        : { key: null, name: 'Comandat în total', bani: F.ordered_bani, meta: buc(F.ordered_units) + ' · toate comenzile, fără asigurări' };
       const legend = h('div', { class: 'ed-funnel-legend' },
-        item({ key: null, name: 'Comandat în total', bani: F.ordered_bani, units: F.ordered_units, meta: buc(F.ordered_units) + ' · toate comenzile, fără asigurări' }, '', true),
+        item(ordered, '', true),
         minus.map((f) => item(f, MINUS + NBSP, false)),
+        P ? item({ key: null, name: 'Transport și taxe', bani: F.fees_bani, meta: 'comenzile livrate; nu se împart pe produse' }, '+' + NBSP, true) : null,
         item(kept, '=' + NBSP, false, 'ed-fl-final'));
+      const notes = [];
+      if (P && P.credit_returns_bani) {
+        notes.push(h('p', { class: 'ed-note' }, rich('Plătit efectiv include ' + lei(P.credit_returns_bani) + ' pe ' + buc(P.credit_returns_units) +
+          ' returnate cu voucher sau sold eMAG: banii nu s-au întors în cont, iar voucherul scade „Total plătit” al comenzii în care îl folosești (altfel s-ar scădea de două ori).')));
+      }
+      if (P && P.refund_differences_bani) {
+        notes.push(h('p', { class: 'ed-note' }, 'Și ' + signedLei(P.refund_differences_bani) + ' diferențe la restituiri: partea plătită a produselor returnate minus suma restituită afișată la retur.'));
+      }
       const empty = !barOrder.some((f) => f.bani > 0);
-      return block('funnel', 'De la comandat la păstrat',
-        heading('De la comandat la păstrat'),
-        h('p', { class: 'ed-caption' }, 'Din valoarea comandată se scad anulatele, returnatele și ce nu a ajuns încă. Ce rămâne e ce ai păstrat.'),
-        h('div', { class: 'ed-card ed-stack' }, empty ? emptyNote('Nu există comenzi de afișat.') : bar, legend));
+      const title = P ? 'De la comandat la plătit' : 'De la comandat la păstrat';
+      return block('funnel', title,
+        heading(title),
+        h('p', { class: 'ed-caption' }, P
+          ? 'Sumele sunt cele plătite: după reduceri și vouchere. Din ce ai comandat se scad anulările, banii primiți înapoi la retururi și ce nu a ajuns încă; transportul și taxele comenzilor livrate se adaugă.'
+          : 'Din valoarea comandată se scad anulatele, returnatele și ce nu a ajuns încă. Ce rămâne e ce ai păstrat.'),
+        h('div', { class: 'ed-card ed-stack' }, empty ? emptyNote('Nu există comenzi de afișat.') : bar, legend, notes));
     }
 
     function tilesBlock(D) {
-      const F = D.funnel, O = D.orders, big = D.big;
+      const P = D.paid, O = D.orders, big = D.big;
+      const F = P ? P.funnel : D.funnel;
       let ordersDesc = 'comenzi în cont: ' + int(O.kept_all) + ' păstrate integral, ' + int(O.kept_partial) + ' parțial, ' +
         int(O.returned_all) + ' returnate, ' + int(O.cancelled_all) + ' anulate';
       if (O.in_progress) ordersDesc += ', ' + int(O.in_progress) + ' în curs';
       if (O.unknown) ordersDesc += ', ' + int(O.unknown) + ' cu status necunoscut';
       const tiles = [
         { num: int(O.total), desc: ordersDesc },
-        { num: lei(F.returned_bani), desc: 'returnat (' + buc(F.returned_units) + '), scăzut din total' },
+        { num: lei(F.returned_bani), desc: (P ? 'primit înapoi la retururi (' : 'returnat (') + buc(F.returned_units) + '), scăzut din total' },
         { num: lei(F.cancelled_bani), desc: 'anulat (' + buc(F.cancelled_units) + '), scăzut din total' },
-        { num: int(big.kept_units), desc: 'produse păstrate peste ' + lei(big.threshold_bani) + ' bucata, în valoare de ' + lei(big.kept_bani) },
+        { num: int(big.kept_units), desc: P
+          ? 'produse păstrate peste ' + lei(big.threshold_bani) + ' bucata (preț de listă), plătite ' + lei(big.kept_paid_bani)
+          : 'produse păstrate peste ' + lei(big.threshold_bani) + ' bucata, în valoare de ' + lei(big.kept_bani) },
       ];
       Object.keys(D.highlights).forEach((name) => {
         const t = D.highlights[name].totals;
-        tiles.push({ num: lei(t.kept_bani), desc: name + ': ' + buc(t.kept_units) + ' păstrate' });
+        tiles.push({ num: lei(P ? t.paid_kept_bani : t.kept_bani), desc: name + ': ' + buc(t.kept_units) + ' păstrate' });
       });
       return block('tiles', 'Cifre pe scurt',
         heading('Cifre pe scurt', 0, 'ed-sr'),
         h('ul', { class: 'ed-tiles', role: 'list' }, tiles.map((t) => h('li', { class: 'ed-tile' }, h('p', { class: 'ed-tile-num' }, t.num), h('p', { class: 'ed-tile-desc' }, t.desc)))));
     }
 
+    /** Rândurile categoriilor ca bare: cu `paid`, sumele plătite plus rândurile care nu sunt produse (transport și taxe…). */
+    function categoryBars(D) {
+      const P = D.paid;
+      const bars = D.by_category.filter((c) => (P ? c.paid_kept_bani : c.kept_bani) > 0).map((c) => ({
+        name: c.name, bani: P ? c.paid_kept_bani : c.kept_bani, units: c.kept_units,
+        tip: (P
+          ? [{ label: 'Plătit', value: lei(c.paid_kept_bani) }, { label: 'La preț de listă', value: lei(c.kept_bani) }, { label: 'Bucăți păstrate', value: buc(c.kept_units) },
+            { label: 'Comandat', value: lei(c.paid_ordered_bani) }, { label: 'Returnat', value: lei(c.paid_returned_bani) }, { label: 'Anulat', value: lei(c.paid_cancelled_bani) }]
+          : [{ label: 'Păstrat', value: lei(c.kept_bani) }, { label: 'Bucăți păstrate', value: buc(c.kept_units) },
+            { label: 'Comandat', value: lei(c.ordered_bani) }, { label: 'Returnat', value: lei(c.returned_bani) }, { label: 'Anulat', value: lei(c.cancelled_bani) }])
+          .concat((P ? c.paid_pending_bani : c.pending_bani) ? [{ label: 'În curs', value: lei(P ? c.paid_pending_bani : c.pending_bani) }] : []),
+      }));
+      if (P) {
+        P.extra_rows.filter((r) => r.bani !== 0).forEach((r) => bars.push({
+          name: r.name, bani: r.bani, units: null, extra: true, tip: [{ label: 'Plătit', value: lei(r.bani) }],
+          note: hasOwn(EXTRA_ROW_NOTES, r.key) ? EXTRA_ROW_NOTES[r.key] : '',
+        }));
+      }
+      return bars;
+    }
+
     function categoriesBlock(D) {
-      const F = D.funnel;
-      const shown = D.by_category.filter((c) => c.kept_bani > 0);
+      const P = D.paid, F = D.funnel;
+      const shown = categoryBars(D);
+      const total = P ? P.spent_bani : F.kept_bani;
+      const extras = shown.filter((b) => b.extra && b.note);
       const barsHost = h('div', null, shown.length
-        ? barList(shown.map((c) => ({
-          name: c.name, bani: c.kept_bani, units: c.kept_units,
-          tip: [
-            { label: 'Păstrat', value: lei(c.kept_bani) }, { label: 'Bucăți păstrate', value: buc(c.kept_units) },
-            { label: 'Comandat', value: lei(c.ordered_bani) }, { label: 'Returnat', value: lei(c.returned_bani) },
-            { label: 'Anulat', value: lei(c.cancelled_bani) },
-          ].concat(c.pending_bani ? [{ label: 'În curs', value: lei(c.pending_bani) }] : []),
-        })), F.kept_bani)
+        ? [barList(shown, total), extras.length ? h('ul', { class: 'ed-extra-notes', role: 'list' },
+          extras.map((b) => h('li', null, h('strong', null, rich(b.name)), ': ', rich(b.note), '.'))) : null]
         : emptyNote('Nu există produse păstrate.'));
       const tableHost = h('div', { hidden: 'hidden' });
       const button = toggleButton();
       wireToggle(button, [barsHost], tableHost, () => {
-        const head = [{ label: 'Categorie', name: true }, { label: 'Păstrat', num: true }, { label: 'Buc', num: true }, { label: 'Comandat', num: true },
+        const head = [{ label: 'Categorie', name: true }, { label: P ? 'Plătit' : 'Păstrat', num: true }, { label: 'Buc', num: true }, { label: 'Comandat', num: true },
           { label: 'Returnat', num: true }, { label: 'Anulat', num: true }, { label: 'În curs', num: true }];
-        const rows = D.by_category.map((c) => [c.name, lei(c.kept_bani), int(c.kept_units), lei(c.ordered_bani), lei(c.returned_bani), lei(c.cancelled_bani), lei(c.pending_bani)]);
-        return tableWrap('Pe categorii', buildTable('Pe categorii', head, rows, ['Total', lei(F.kept_bani), int(F.kept_units), lei(F.ordered_bani), lei(F.returned_bani), lei(F.cancelled_bani), lei(F.pending_bani)]));
+        if (!P) {
+          const rows = D.by_category.map((c) => [c.name, lei(c.kept_bani), int(c.kept_units), lei(c.ordered_bani), lei(c.returned_bani), lei(c.cancelled_bani), lei(c.pending_bani)]);
+          return tableWrap('Pe categorii', buildTable('Pe categorii', head, rows, ['Total', lei(F.kept_bani), int(F.kept_units), lei(F.ordered_bani), lei(F.returned_bani), lei(F.cancelled_bani), lei(F.pending_bani)]));
+        }
+        const sum = (k) => D.by_category.reduce((a, c) => a + num(c[k]), 0);
+        const rows = D.by_category.map((c) => [c.name, lei(c.paid_kept_bani), int(c.kept_units), lei(c.paid_ordered_bani), lei(c.paid_returned_bani), lei(c.paid_cancelled_bani), lei(c.paid_pending_bani)])
+          .concat(P.extra_rows.filter((r) => r.bani !== 0).map((r) => [r.name, lei(r.bani), '', '', '', '', '']));
+        return tableWrap('Pe categorii', buildTable('Pe categorii', head, rows, ['Total', lei(P.spent_bani), int(sum('kept_units')), lei(sum('paid_ordered_bani')),
+          lei(sum('paid_returned_bani')), lei(sum('paid_cancelled_bani')), lei(sum('paid_pending_bani'))]));
       });
       return block('categories', 'Pe ce s-au dus banii',
         h('div', { class: 'ed-sec-head' }, heading('Pe ce s-au dus banii'), button),
-        h('p', { class: 'ed-caption' }, 'Valoarea produselor păstrate (livrate sau ridicate și nereturnate), pe categorii. Regulile de categorii se pot edita în ', h('code', { translate: 'no' }, 'config/categorii.json'), '.'),
+        P
+          ? h('p', { class: 'ed-caption' }, 'Banii plătiți pe produsele păstrate, pe categorii, după reduceri: fiecare produs primește partea lui din voucherele și reducerile comenzii, proporțional cu prețul. Rândurile care nu sunt produse stau separat, ca toate rândurile să se adune exact la cât ai cheltuit. Regulile tale de categorii le pui în ', h('code', { translate: 'no' }, 'config/categorii.personal.json'), ', pe care actualizarea îl păstrează.')
+          : h('p', { class: 'ed-caption' }, 'Valoarea produselor păstrate (livrate sau ridicate și nereturnate), pe categorii. Regulile tale de categorii le pui în ', h('code', { translate: 'no' }, 'config/categorii.personal.json'), ', pe care actualizarea îl păstrează.'),
         h('div', { class: 'ed-card' }, barsHost, tableHost));
     }
 
     function highlightsBlock(D) {
       const names = Object.keys(D.highlights);
       const title = highlightsTitle(names);
+      const P = D.paid;
       const cards = names.map((name) => {
         const b = D.highlights[name], t = b.totals, items = b.items;
         const total = typeof b.items_total === 'number' ? b.items_total : items.length;
+        const amount = (paidKey, listKey) => lei(P ? t[paidKey] : t[listKey]);
         const card = h('div', { class: 'ed-card ed-hl' },
           h(hTag(1), { class: 'ed-label' }, rich(name)),
-          h('div', { class: 'ed-hl-num' }, h('span', { class: 'ed-hl-v' }, lei(t.kept_bani)), h('span', { class: 'ed-hl-u' }, buc(t.kept_units) + ' păstrate')),
-          h('p', { class: 'ed-hl-meta' }, 'Comandat: ' + buc(t.ordered_units) + ' (' + lei(t.ordered_bani) + ') · returnat: ' + buc(t.returned_units) + ' (' + lei(t.returned_bani) +
-            ') · anulat: ' + buc(t.cancelled_units) + ' (' + lei(t.cancelled_bani) + ')' + (t.pending_bani ? ' · în curs: ' + lei(t.pending_bani) : '')));
+          h('div', { class: 'ed-hl-num' }, h('span', { class: 'ed-hl-v' }, amount('paid_kept_bani', 'kept_bani')),
+            h('span', { class: 'ed-hl-u' }, buc(t.kept_units) + (P ? ' păstrate, plătit după reduceri' : ' păstrate'))),
+          h('p', { class: 'ed-hl-meta' }, 'Comandat: ' + buc(t.ordered_units) + ' (' + amount('paid_ordered_bani', 'ordered_bani') + ') · returnat: ' + buc(t.returned_units) + ' (' +
+            amount('paid_returned_bani', 'returned_bani') + ') · anulat: ' + buc(t.cancelled_units) + ' (' + amount('paid_cancelled_bani', 'cancelled_bani') + ')' +
+            ((P ? t.paid_pending_bani : t.pending_bani) ? ' · în curs: ' + amount('paid_pending_bani', 'pending_bani') : '')));
         if (items.length) {
           const head = [{ label: 'Data și comanda', nowrap: true }, { label: 'Produs', name: true }, { label: 'Buc', num: true },
-            { label: 'Valoare', num: true }, { label: 'Stare' }];
+            { label: P ? 'Plătit' : 'Valoare', num: true }, { label: 'Stare' }];
           card.appendChild(paged(items, (slice) => tableWrap(name, buildTable(name, head,
-            slice.map((i) => [dateAndOrder(i.date, i.order_id, demoMode), i.name, int(i.qty), lei(i.amount_bani), pill(i.state)]), null, true))));
+            slice.map((i) => [dateAndOrder(i.date, i.order_id, demoMode), productLink(i.name, i.order_id, 1, demoMode), int(i.qty),
+              lei(P ? i.paid_amount_bani : i.amount_bani), pill(i.state)]), null, true))));
           if (total > items.length) card.appendChild(h('p', { class: 'ed-hl-meta' }, 'Primele ' + int(items.length) + ' din ' + int(total) + ' (vezi produse.csv pentru toate).'));
         } else card.appendChild(h('p', { class: 'ed-hl-meta' }, 'Niciun produs în această categorie.'));
         return card;
@@ -901,7 +1040,8 @@
     }
 
     function yearsBlock(D) {
-      const YC = D.by_year_category, F = D.funnel;
+      const P = D.paid, F = D.funnel;
+      const YC = P ? P.by_year_category : D.by_year_category;
       const years = YC.years, series = YC.series;
       const legend = h('div', { class: 'ed-legend' }, series.map((n, i) => h('span', { class: 'ed-legend-item' }, h('i', { class: 'ed-sw', 'aria-hidden': 'true', style: { background: seriesColor(n, i) } }), rich(n))));
       const chartHost = trackScroll(h('div', { class: 'ed-chart-scroll' }), 'Grafic pe ani, derulează orizontal dacă nu încape');
@@ -928,7 +1068,8 @@
         const W = Math.max(avail || CHART_DEFAULT_WIDTH, L + R + years.length * YEAR_SLOT_MIN);
         const pw = W - L - R, ph = H - T - B;
         const yPos = (bani) => T + ph - (bani / (yMaxLei * 100)) * ph;
-        const svg = sv('svg', { class: 'ed-chart', viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, role: 'group', 'aria-label': 'Valoare păstrată pe ani, pe categorii' });
+        const svg = sv('svg', { class: 'ed-chart', viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, role: 'group',
+          'aria-label': P ? 'Bani plătiți pe ani, pe categorii' : 'Valoare păstrată pe ani, pe categorii' });
         for (let i = 0; i * step <= yMaxLei + 1e-6; i++) {
           const v = i * step;
           svg.appendChild(sv('line', { x1: L, x2: W - R, y1: yPos(v * 100), y2: yPos(v * 100), class: v === 0 ? 'ed-axis-line' : 'ed-grid-line', 'aria-hidden': 'true' }));
@@ -971,9 +1112,14 @@
       wireToggle(button, [chartHost, legend], tableHost, () => {
         const yrs = D.by_year;
         const head = [{ label: 'An' }, { label: 'Comenzi', num: true }, { label: 'Cu produse păstrate', num: true }, { label: 'Comandat', num: true },
-          { label: 'Returnat', num: true }, { label: 'Anulat', num: true }, { label: 'Păstrat', num: true }, { label: 'Buc păstrate', num: true }];
-        const rows = yrs.map((r) => [r.year, int(r.orders), int(r.orders_with_kept), lei(r.ordered_bani), lei(r.returned_bani), lei(r.cancelled_bani), lei(r.kept_bani), int(r.kept_units)]);
+          { label: 'Returnat', num: true }, { label: 'Anulat', num: true }, { label: P ? 'Plătit efectiv' : 'Păstrat', num: true }, { label: 'Buc păstrate', num: true }];
         const sum = (k) => yrs.reduce((a, r) => a + num(r[k]), 0);
+        if (P) {
+          const paidRows = yrs.map((r) => [r.year, int(r.orders), int(r.orders_with_kept), lei(r.paid_ordered_bani), lei(r.paid_returned_bani), lei(r.paid_cancelled_bani), lei(r.spent_bani), int(r.kept_units)]);
+          return tableWrap('Pe ani', buildTable('Pe ani', head, paidRows, ['Total', int(sum('orders')), int(sum('orders_with_kept')), lei(sum('paid_ordered_bani')),
+            lei(sum('paid_returned_bani')), lei(sum('paid_cancelled_bani')), lei(sum('spent_bani')), int(sum('kept_units'))]));
+        }
+        const rows = yrs.map((r) => [r.year, int(r.orders), int(r.orders_with_kept), lei(r.ordered_bani), lei(r.returned_bani), lei(r.cancelled_bani), lei(r.kept_bani), int(r.kept_units)]);
         return tableWrap('Pe ani', buildTable('Pe ani', head, rows, ['Total', int(sum('orders')), int(sum('orders_with_kept')), lei(F.ordered_bani), lei(F.returned_bani), lei(F.cancelled_bani), lei(F.kept_bani), int(F.kept_units)]));
       }, () => { drawnWidth = -1; scheduleLayout(); });
 
@@ -983,25 +1129,30 @@
       else card.append(emptyNote('Nu există date pe ani.'));
       const block1 = block('years', 'Pe ani',
         h('div', { class: 'ed-sec-head' }, heading('Pe ani'), years.length ? button : null),
-        h('p', { class: 'ed-caption' }, 'Valoarea păstrată pe anul în care s-a plasat comanda, pe cele mai mari categorii.'),
+        h('p', { class: 'ed-caption' }, P
+          ? 'Banii plătiți efectiv, pe anul în care s-a plasat comanda, pe cele mai mari categorii. Transportul și taxele au seria lor dacă intră printre cele mai mari; altfel stau la „Altele”.'
+          : 'Valoarea păstrată pe anul în care s-a plasat comanda, pe cele mai mari categorii.'),
         card);
       if (years.length) draw();
       return block1;
     }
 
     function bigBlock(D) {
-      const big = D.big, items = big.items;
+      const P = D.paid, big = D.big, items = big.items;
+      const total = (state) => lei(P ? big[state + '_paid_bani'] : big[state + '_bani']);
+      const amountOf = (i) => (P ? i.paid_amount_bani : i.amount_bani);
       const title = 'Achiziții peste ' + lei(big.threshold_bani) + ' bucata';
       const caption = items.length
-        ? count(items.length, 'linie de produs depășește', 'linii de produse depășesc') + ' pragul. Păstrate: ' + buc(big.kept_units) + ' (' + lei(big.kept_bani) + '). Returnate: ' +
-          buc(big.returned_units) + ' (' + lei(big.returned_bani) + '). Anulate: ' + buc(big.cancelled_units) + ' (' + lei(big.cancelled_bani) + ').'
+        ? count(items.length, 'linie de produs depășește', 'linii de produse depășesc') + ' pragul' + (P ? ' (prețul de listă pe bucată). Sumele sunt cele plătite, după reduceri.' : '.') +
+          ' Păstrate: ' + buc(big.kept_units) + ' (' + total('kept') + '). Returnate: ' +
+          buc(big.returned_units) + ' (' + total('returned') + '). Anulate: ' + buc(big.cancelled_units) + ' (' + total('cancelled') + ').'
         : 'Niciun produs nu depășește pragul.';
       const counts = new Map([['all', items.length]]);
       items.forEach((i) => counts.set(i.state, (counts.get(i.state) || 0) + 1));
       const FILTERS = [['all', 'Toate'], ['kept', 'Păstrate'], ['returned', 'Returnate'], ['cancelled', 'Anulate'], ['pending', 'În curs'], ['unknown', 'Necunoscute']]
         .filter((f) => counts.get(f[0]));
       const head = [{ label: 'Data și comanda', nowrap: true }, { label: 'Produs', name: true }, { label: 'Vânzător' }, { label: 'Categorie' },
-        { label: 'Preț / buc', num: true }, { label: 'Buc', num: true }, { label: 'Valoare', num: true }, { label: 'Stare' }];
+        { label: P ? 'Preț de listă / buc' : 'Preț / buc', num: true }, { label: 'Buc', num: true }, { label: P ? 'Plătit' : 'Valoare', num: true }, { label: 'Stare' }];
       const host = h('div', { class: 'ed-stack', tabindex: '-1' });
       let current = 'all', limit = ROWS_PAGE;
 
@@ -1009,9 +1160,9 @@
         const rows = items.filter((i) => current === 'all' || i.state === current);
         const shown = rows.slice(0, limit);
         const sumQty = rows.reduce((a, i) => a + num(i.qty), 0);
-        const sumAmount = rows.reduce((a, i) => a + num(i.amount_bani), 0);
-        const body = shown.map((i) => [dateAndOrder(i.date, i.order_id, demoMode), i.name, i.seller, i.category, lei(i.unit_bani), int(i.qty), lei(i.amount_bani),
-          pill(i.state, i.returned_from_cancelled ? [' (marcat anulat de ', h('span', { translate: 'no' }, 'eMAG'), ')'] : null)]);
+        const sumAmount = rows.reduce((a, i) => a + num(amountOf(i)), 0);
+        const body = shown.map((i) => [dateAndOrder(i.date, i.order_id, demoMode), productLink(i.name, i.order_id, 1, demoMode), i.seller, i.category, lei(i.unit_bani), int(i.qty),
+          lei(amountOf(i)), pill(i.state, i.returned_from_cancelled ? [' (marcat anulat de ', h('span', { translate: 'no' }, 'eMAG'), ')'] : null)]);
         const foot = ['', 'Total (' + count(rows.length, 'linie', 'linii') + ')', '', '', '', int(sumQty), lei(sumAmount), ''];
         const remaining = rows.length - shown.length;
         let more = null;
@@ -1043,15 +1194,21 @@
     }
 
     function topBlock(D) {
-      const rows = D.top_products;
+      const P = D.paid, rows = D.top_products;
       // Ordinea e după valoarea TOTALĂ păstrată pe produs (spend_analysis._top_products), nu după prețul pe bucată:
       // un produs ieftin cumpărat des poate trece înaintea unuia scump cumpărat o dată. Titlul spune asta.
       const title = 'Produse cu cea mai mare valoare păstrată';
-      const head = [{ label: 'Produs', name: true }, { label: 'Categorie' }, { label: 'Buc', num: true }, { label: 'Păstrat', num: true }];
+      const head = [{ label: 'Produs', name: true }, { label: 'Categorie' }, { label: 'Buc', num: true }, { label: P ? 'Plătit' : 'Păstrat', num: true }];
+      const linked = !demoMode && rows.some((p) => orderUrl(p.order_id) !== null);
       return block('top', title,
         heading(title),
+        P || linked
+          ? h('p', { class: 'ed-caption' }, rich((P ? 'Suma plătită pe fiecare produs păstrat, după reduceri, adunată pe toate comenzile lui.' : '') +
+            (linked ? (P ? ' ' : '') + 'Numele duce la comanda lui cea mai recentă pe eMAG.' : '')))
+          : null,
         rows.length
-          ? paged(rows, (slice) => tableWrap(title, buildTable(title, head, slice.map((p) => [p.name, p.category, int(p.units), lei(p.bani)]), null, true)))
+          ? paged(rows, (slice) => tableWrap(title, buildTable(title, head,
+            slice.map((p) => [productLink(p.name, p.order_id, p.order_count, demoMode), p.category, int(p.units), lei(P ? p.paid_bani : p.bani)]), null, true)))
           : emptyNote('Nu există produse păstrate.'));
     }
 
@@ -1086,7 +1243,8 @@
       const spread = p.min_unit_bani !== p.max_unit_bani;
       const rows = p.purchases.map((b) => {
         const tag = !spread ? null : b.unit_bani === p.min_unit_bani ? 'cel mai mic' : b.unit_bani === p.max_unit_bani ? 'cel mai mare' : null;
-        return [fmtDate(b.date), b.name, b.seller, int(b.qty), [lei(b.unit_bani), tag ? h('span', { class: 'ed-sub' }, tag) : null], orderLink(b.order_id, demoMode)];
+        return [fmtDate(b.date), productLink(b.name, b.order_id, 1, demoMode), b.seller, int(b.qty), [lei(b.unit_bani), tag ? h('span', { class: 'ed-sub' }, tag) : null],
+          orderLink(b.order_id, demoMode)];
       });
       return buildTable('Istoricul prețurilor pentru ' + p.name, head, rows, null, true);
     }
@@ -1154,13 +1312,16 @@
         const shown = rows.slice(0, limit);
         found = rows.length;
         status.textContent = statusText();
+        // Săgeata deschide istoricul (buton separat); numele e link spre comanda cea mai recentă a produsului (cumpărările sunt cronologice).
         const buttons = shown.map(({ p }) => h('button', { class: 'ed-ph-open', type: 'button', 'aria-expanded': 'false' },
-          h('span', { class: 'ed-chev', 'aria-hidden': 'true' }, '▸'), h('span', { class: 'ed-pname' }, rich(p.name)),
-          h('span', { class: 'ed-sr' }, ' (arată istoricul prețurilor)')));
+          h('span', { class: 'ed-chev', 'aria-hidden': 'true' }, '▸'),
+          h('span', { class: 'ed-sr' }, 'Arată istoricul prețurilor: ' + p.name)));
         let table = null;
         if (shown.length) {
           const body = shown.map(({ p }, i) => [
-            [buttons[i], p.category ? h('span', { class: 'ed-sub' }, rich(p.category)) : null],
+            [h('div', { class: 'ed-ph-name' }, buttons[i], h('span', { class: 'ed-pname' },
+              productLink(p.name, p.purchases[p.purchases.length - 1].order_id, new Set(p.purchases.map((b) => b.order_id)).size, demoMode))),
+            p.category ? h('span', { class: 'ed-sub' }, rich(p.category)) : null],
             [int(p.purchases.length), h('span', { class: 'ed-sub' }, buc(p.kept_units))],
             plainMoney(p.first_unit_bani), plainMoney(p.last_unit_bani), plainMoney(p.min_unit_bani), plainMoney(p.max_unit_bani),
             priceChange(p), lei(p.overpaid_vs_min_bani), sparkline(p)]);
@@ -1211,7 +1372,8 @@
       });
 
       out.append(tileList, tools, status, host,
-        h('p', { class: 'ed-note ed-ph-limits' }, rich('Cum se citește: prețurile sunt cele din comenzi, pe bucată, înainte de vouchere. Pot include promoții și pot veni de la vânzători diferiți ' +
+        h('p', { class: 'ed-note ed-ph-limits' }, rich('Cum se citește: prețurile sunt cele din comenzi, pe bucată, înainte de vouchere: aici se compară prețul de listă, nu suma plătită ' +
+          '(aceea e în restul raportului). Pot include promoții și pot veni de la vânzători diferiți ' +
           '(eMAG sau marketplace), deci o diferență arată cum s-a schimbat prețul plătit, nu dacă oferta a fost bună sau proastă. Culorile din nume se ignoră ' +
           '(același model în alb și în negru e același produs); capacitatea sau dimensiunea (de exemplu 128 GB, 55 inch) nu se ignoră: sunt produse diferite.')));
       render(false);
@@ -1219,27 +1381,36 @@
     }
 
     function sellersBlock(D) {
-      const sellers = D.by_seller, total = D.funnel.kept_bani;
+      const P = D.paid, sellers = D.by_seller;
+      const total = P ? P.products_kept_bani : D.funnel.kept_bani;
       return block('sellers', 'Vânzători',
         heading('Vânzători'),
-        h('p', { class: 'ed-caption' }, rich('Valoarea păstrată pe vânzător (eMAG sau vânzători din marketplace).')),
+        h('p', { class: 'ed-caption' }, rich(P
+          ? 'Banii plătiți pe produsele păstrate, pe vânzător (eMAG sau vânzători din marketplace), după reduceri; fără transport și taxe.'
+          : 'Valoarea păstrată pe vânzător (eMAG sau vânzători din marketplace).')),
         h('div', { class: 'ed-card' }, sellers.length
           ? barList(sellers.map((x) => ({
-            name: x.seller, bani: x.bani, units: x.units,
-            tip: [{ label: 'Păstrat', value: lei(x.bani) }, { label: 'Bucăți', value: buc(x.units) }],
+            name: x.seller, bani: P ? x.paid_bani : x.bani, units: x.units,
+            tip: (P ? [{ label: 'Plătit', value: lei(x.paid_bani) }, { label: 'La preț de listă', value: lei(x.bani) }] : [{ label: 'Păstrat', value: lei(x.bani) }])
+              .concat([{ label: 'Bucăți', value: buc(x.units) }]),
           })), total)
           : emptyNote('Nu există vânzători de afișat.')));
     }
 
+    /** Numele produselor unui bloc, fiecare ca link spre comanda blocului, despărțite prin „; ”. */
+    function productNames(names, orderId) {
+      return names.map((name, i) => [i ? '; ' : null, productLink(name, orderId, 1, demoMode)]);
+    }
+
     function excludedBlock(D) {
-      const rows = D.paid_only.map((b) => ['Plătit fără livrare', dateAndOrder(b.date, b.order_id, demoMode), b.seller, b.names.join('; '), lei(b.paid_bani)])
-        .concat(D.in_progress.map((b) => ['În curs', dateAndOrder(b.date, b.order_id, demoMode), b.seller, b.names.join('; '), lei(b.paid_bani)]));
+      const rows = D.paid_only.map((b) => ['Plătit fără livrare', dateAndOrder(b.date, b.order_id, demoMode), b.seller, productNames(b.names, b.order_id), lei(b.paid_bani)])
+        .concat(D.in_progress.map((b) => ['În curs', dateAndOrder(b.date, b.order_id, demoMode), b.seller, productNames(b.names, b.order_id), lei(b.paid_bani)]));
       const title = 'Rămase în afara calculului';
       const head = [{ label: 'Tip', nowrap: true }, { label: 'Data și comanda', nowrap: true }, { label: 'Vânzător' }, { label: 'Produse', name: true },
         { label: 'Plătit', num: true }];
       return block('excluded', title,
         heading(title),
-        h('p', { class: 'ed-caption' }, 'Plătite fără livrare de produse (asigurări) sau încă nelivrate. Nu intră în suma păstrată.'),
+        h('p', { class: 'ed-caption' }, 'Plătite fără livrare de produse (asigurări) sau încă nelivrate. Nu intră în cât ai cheltuit.'),
         rows.length
           ? paged(rows, (slice) => tableWrap(title, buildTable(title, head, slice, null, true)))
           : emptyNote('Nimic de raportat aici.'));
@@ -1285,10 +1456,21 @@
         groups.map(warningGroup));
     }
 
+    /** Reconcilierea plătitului efectiv cu „Total plătit” al comenzilor livrate (rânduri cheie-valoare); estimările sunt numite. */
+    function paidCheckRows(P) {
+      const C = P.reconciliation;
+      const rows = [['Total plătit eMAG, comenzi livrate/ridicate', lei(C.paid_delivered_bani)]];
+      if (C.rebuilt_blocks) rows.push(['din care calculat din componente (' + count(C.rebuilt_blocks, 'bloc', 'blocuri') + ' fără „Total plătit”)', lei(C.rebuilt_bani)]);
+      rows.push([MINUS + ' bani primiți înapoi la retururi', lei(C.cash_refunds_bani) + (C.estimated_refunds
+        ? ' (din care estimat ' + lei(C.estimated_refunds_bani) + ', ' + count(C.estimated_refunds, 'retur', 'retururi') + ' fără sumă afișată)' : ''), !!C.estimated_refunds]);
+      if (C.credit_returns_added_bani) rows.push(['+ retururi cu voucher sau sold, din comenzi marcate „anulat”', lei(C.credit_returns_added_bani)]);
+      rows.push(['= Plătit efectiv', lei(C.spent_bani)]);
+      return rows;
+    }
+
     function controlBlock(D) {
-      const R = D.reconciliation, M = D.meta, W = D.warnings;
-      const kv = [
-        ['Total plătit eMAG, comenzi livrate/ridicate', lei(R.paid_delivered_bani)],
+      const R = D.reconciliation, M = D.meta, W = D.warnings, P = D.paid;
+      const kv = (P ? paidCheckRows(P) : [['Total plătit eMAG, comenzi livrate/ridicate', lei(R.paid_delivered_bani)]]).concat([
         ['din care vouchere și reduceri', lei(R.vouchers_delivered_bani)],
         ['din care transport', lei(R.shipping_delivered_bani)],
         ['din care servicii și taxe', lei(R.services_delivered_bani)],
@@ -1300,7 +1482,12 @@
         ['din care marcate „anulat” de eMAG', buc(D.returns.matched_from_cancelled_units)],
         ['Comenzi cu factură storno', int(R.orders_with_storno.length)],
         ['Comenzi analizate / blocuri / produse', int(M.orders) + ' / ' + int(M.blocks) + ' / ' + int(M.lines)],
-      ];
+      ]);
+      if (P) {
+        const C = P.reconciliation;
+        kv.push(['La preț de listă, înainte de reduceri: comandat / păstrat', lei(D.funnel.ordered_bani) + ' / ' + lei(D.funnel.kept_bani), true]);
+        kv.push(['În afara calculului: în curs / plătite fără livrare', lei(C.in_progress_bani) + ' / ' + lei(C.paid_only_bani), true]);
+      }
       const modes = R.refund_modes ? Object.keys(R.refund_modes) : [];
       if (modes.length) kv.push(['Moduri de restituire', modes.map((k) => k + ': ' + int(R.refund_modes[k])).join(' · '), true]);
       const grid = h('dl', { class: 'ed-kv' }, kv.map((r) => h('div', null, h('dt', null, rich(r[0])), h('dd', { class: r[2] ? 'ed-long' : null }, rich(r[1])))));
@@ -1324,10 +1511,10 @@
         const more = D.uncategorized_count > shown.length ? ' (primele ' + int(shown.length) + ')' : '';
         stack.appendChild(h('details', null,
           h('summary', null, count(D.uncategorized_count, 'produs necategorizat', 'produse necategorizate') + more),
-          h('p', { class: 'ed-caption ed-after-summary' }, 'Adaugă reguli în ', h('code', { translate: 'no' }, 'config/categorii.json'), ' și refă raportul cu ', h('code', { translate: 'no' }, '--din-cache'), '.'),
+          h('p', { class: 'ed-caption ed-after-summary' }, 'Adaugă reguli în ', h('code', { translate: 'no' }, 'config/categorii.personal.json'), ' și refă raportul cu ', h('code', { translate: 'no' }, '--din-cache'), '.'),
           tableWrap('Produse necategorizate', buildTable('Produse necategorizate',
             [{ label: 'Produs', name: true }, { label: 'Buc', num: true }, { label: 'Valoare', num: true }],
-            shown.map((u) => [u.name, int(u.units), lei(u.bani)]), null, true))));
+            shown.map((u) => [productLink(u.name, u.order_id, u.order_count, demoMode), int(u.units), lei(u.bani)]), null, true))));
       }
       return block('control', 'Cifre de control',
         heading('Cifre de control'),
@@ -1336,6 +1523,7 @@
     }
 
     function methodBlock(D) {
+      if (D.paid) return paidMethodBlock(D);
       return block('method', 'Cum se calculează',
         heading('Cum se calculează'),
         h('div', { class: 'ed-method' },
@@ -1345,6 +1533,20 @@
           h('p', null, h('strong', null, 'Achiziție mare. '), 'Un produs cu prețul pe bucată strict peste ' + lei(D.meta.threshold_bani) + '. Pragul se schimbă cu ', h('code', { translate: 'no' }, '--prag'), ' la rulare.')));
     }
 
+    /** Nota de metodă a unui raport cu `paid`: regulile banilor plătiți, ale retururilor și ce rămâne la preț de listă. */
+    function paidMethodBlock(D) {
+      return block('method', 'Cum se calculează',
+        heading('Cum se calculează'),
+        h('div', { class: 'ed-method' },
+          h('p', null, h('strong', null, 'Cât ai cheltuit. '), rich('Suma „Total plătit” a fiecărei comenzi livrate sau ridicate (după vouchere, card cadou și reduceri, cu transportul și taxele), minus banii primiți înapoi la retururi. O comandă fără „Total plătit” afișat se calculează din componentele ei: produse, reduceri, transport, taxe.')),
+          h('p', null, h('strong', null, 'Pe produse. '), rich('Fiecare produs primește partea lui din reducerile comenzii, proporțional cu prețul lui, în bani întregi; așa restituie și eMAG la retur. Transportul și taxele nu se împart pe produse: au rândul lor, „Transport și taxe”, ca rândurile de la categorii să se adune exact la cât ai cheltuit.')),
+          h('p', null, h('strong', null, 'Retururi. '), rich('Un retur finalizat se numără ca returnat, nu ca anulare. Cu bani înapoi: se scade suma restituită afișată; dacă pagina nu o arată, partea plătită a produsului (estimare, numărată la cifrele de control). Cu voucher sau sold eMAG: nu se scade nimic, fiindcă voucherul scade deja „Total plătit” al comenzii în care îl folosești; scăzut și aici, ar fi scăzut de două ori. Pe paginile observate la scrierea programului, produsele vândute de eMAG și returnate rămân în comandă cu factură storno, iar la vânzătorii din marketplace eMAG marchează returul „Livrare anulată”: acolo plata și restituirea se anulează reciproc, iar un astfel de retur cu voucher se adaugă o singură dată, la „Retururi cu voucher sau sold eMAG”. Dacă la contul tău apare altfel, verifică în cont cifrele de la retururi. Modurile de restituire se pot edita în '),
+            h('code', { translate: 'no' }, 'config/restituiri.json'), '.'),
+          h('p', null, h('strong', null, 'Ce nu intră. '), 'Comenzile anulate, cele în curs, asigurările plătite fără livrare de produse și returnările fără pasul „Restituire sumă” (cererea rămâne doar înregistrată sau anulată; produsul rămâne numărat ca păstrat). Un status necunoscut nu e numărat niciodată ca livrat.'),
+          h('p', null, h('strong', null, 'Prețuri de listă. '), 'Pragul pentru „achiziție mare” (strict peste ' + lei(D.meta.threshold_bani) + ' pe bucată, se schimbă cu ', h('code', { translate: 'no' }, '--prag'),
+            ') și „Prețuri la același produs” folosesc prețul de listă pe bucată: sunt comparații de preț, nu de bani plătiți.')));
+    }
+
     /* ---------- stare de eroare: date lipsă sau greșite ---------- */
     function renderError(errors) {
       const list = errors.map((e) => h('li', null, e));
@@ -1352,7 +1554,7 @@
         heading('Nu pot afișa raportul'),
         h('p', { class: 'ed-note' }, 'Datele primite nu au forma pe care o așteaptă raportul:'),
         h('ul', { class: 'ed-error-list' }, list),
-        h('p', { class: 'ed-hint' }, 'Alege din nou fișierul analiza.json din folderul unei rulări (iesiri\\<data>_<ora>\\) sau generează raportul cu ruleaza.bat.'))));
+        h('p', { class: 'ed-hint' }, 'Alege din nou fișierul analiza.json din folderul unei rulări (iesiri\\<data>_<ora>\\) sau refă rularea din aplicația locală.'))));
     }
 
     function renderReport(data) {
@@ -1387,7 +1589,7 @@
         } catch (err) {
           // Bug de desenare pe date neașteptate: arătăm eroarea în loc de o pagină pe jumătate goală.
           self.ok = false;
-          self.errors = ['Nu am putut desena raportul din aceste date. Încearcă să refaci fișierul cu ruleaza.bat.'];
+          self.errors = ['Nu am putut desena raportul din aceste date. Încearcă să refaci rularea din aplicația locală.'];
           root.setAttribute('data-ed-state', 'error');
           clearRoot();
           if (demoMode) root.appendChild(h('div', { class: 'ed-banner', role: 'note' }, 'Date de demonstrație, inventate. Nu sunt comenzile nimănui.'));

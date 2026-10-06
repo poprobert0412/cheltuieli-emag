@@ -1,8 +1,9 @@
-"""Ajutoare pentru testele aplicației locale: server real pornit în fir, client HTTP, runner fals, așteptări cu termen.
+"""Ajutoare pentru testele aplicației locale: server real pornit în fir, client HTTP, runner fals, job de actualizare fals, așteptări cu termen.
 
 Ce face: pornește `AppServer` pe 127.0.0.1, port 0, într-un fir al testului; trimite cereri cu `http.client` sau pe socket brut
-(pentru forme de cale pe care un client obișnuit le normalizează); oferă un runner fals care respectă contractul AppRunner și o
-funcție de așteptare cu termen (fără `sleep` fix). Ce NU face: nu conține teste. Valorile sunt inventate.
+(pentru forme de cale pe care un client obișnuit le normalizează); oferă un runner fals care respectă contractul AppRunner, un job
+de actualizare fals (contractul app_update_job.UpdateJob, fără nicio cerere spre internet) și o funcție de așteptare cu termen
+(fără `sleep` fix). Ce NU face: nu conține teste. Valorile sunt inventate.
 """
 
 import contextlib
@@ -16,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from emag_spend import session_cleaner
+from emag_spend import app_update_job, session_cleaner
 from emag_spend.app_runner import RunnerBusy, RunRequest
 from emag_spend.app_security import TOKEN_HEADER
 from emag_spend.app_server import STOP_SHUTDOWN, AppServer
@@ -104,6 +105,55 @@ class FakeRunner:
         return True
 
 
+class FakeUpdateJob:
+    """Job de actualizare fals cu aceeași suprafață ca app_update_job.UpdateJob: starea o pune testul, nimic nu iese pe internet.
+
+    `refusal` (ApplyRefused) face ca `start_apply` să refuze; `blocking` = „actualizarea lucrează sau e gata”; apelurile se notează în `calls`.
+    """
+
+    def __init__(self):
+        self.calls: list[tuple] = []
+        self.blocking = False
+        self.refusal: app_update_job.ApplyRefused | None = None
+        self.is_run_busy = None
+        self.on_applied = None
+        self.state = {
+            "current": "1.0.0",
+            "check": {"status": "la-zi", "latest": "1.0.0", "notes": "", "published": None, "page_url": None, "message": "Ai ultima versiune."},
+            "apply": {"state": "inactiv", "message": "", "to_version": None},
+        }
+
+    def attach(self, *, is_run_busy, on_applied) -> None:
+        """Reține legăturile date de server (testul le poate chema ca să simuleze sfârșitul unei actualizări)."""
+        self.is_run_busy, self.on_applied = is_run_busy, on_applied
+
+    def start_check(self, *, enabled: bool) -> None:
+        """Notează pornirea verificării (fără rețea)."""
+        self.calls.append(("start_check", enabled))
+
+    def snapshot(self) -> dict:
+        """Starea comandată de test (copie)."""
+        return json.loads(json.dumps(self.state))
+
+    def start_apply(self) -> dict:
+        """Notează cererea; ridică `refusal` dacă testul l-a pus, altfel trece în „descarc” și întoarce starea aplicării."""
+        self.calls.append(("start_apply",))
+        if self.refusal is not None:
+            raise self.refusal
+        self.blocking = True
+        self.state["apply"] = {"state": "descarc", "message": "Descarc versiunea 9.9.9…", "to_version": "9.9.9"}
+        return dict(self.state["apply"])
+
+    def is_blocking(self) -> bool:
+        """True cât timp testul ține actualizarea „în lucru”."""
+        return self.blocking
+
+    def wait_for_install(self, timeout: float) -> bool:
+        """Notează așteptarea de la oprirea serverului."""
+        self.calls.append(("wait_for_install",))
+        return True
+
+
 class RunningApp:
     """Un AppServer care servește într-un fir; `call` trimite o cerere HTTP și întoarce un Reply."""
 
@@ -188,12 +238,12 @@ class RunningApp:
 
 @contextlib.contextmanager
 def running_app(tmp_path: Path, **overrides):
-    """Pornește un AppServer de test (foldere în `tmp_path`, runner fals dacă nu se dă altul) și îl oprește la ieșire.
+    """Pornește un AppServer de test (foldere în `tmp_path`, runner și job de actualizare false dacă nu se dau altele) și îl oprește la ieșire.
 
-    Parametrii se pot suprascrie (`runner=`, `interface_dir=`, `idle_seconds=`...). Întoarce RunningApp.
+    Parametrii se pot suprascrie (`runner=`, `update_job=`, `interface_dir=`, `idle_seconds=`...). Întoarce RunningApp.
     """
     options = {
-        "runner": FakeRunner(), "outputs_dir": tmp_path / "iesiri", "profile_dir": tmp_path / "profil",
+        "runner": FakeRunner(), "update_job": FakeUpdateJob(), "outputs_dir": tmp_path / "iesiri", "profile_dir": tmp_path / "profil",
         "interface_dir": tmp_path / "interfata", "idle_seconds": 3600, "poll_seconds": POLL_SECONDS,
     }
     options.update(overrides)

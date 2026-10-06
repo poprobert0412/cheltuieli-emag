@@ -3,6 +3,9 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
+# Lansatoarele de macOS și Linux: LF obligatoriu (cu CRLF, sh nu le poate rula).
+*.sh text eol=lf
+*.command text eol=lf
 # Imaginile (capturile din docs/img) sunt binare: git nu le atinge sfârșiturile de rând și nu le compară ca text.
 *.png binary
 *.jpg binary

@@ -1,7 +1,9 @@
-"""Teste pentru linia de comandă: validarea lui --prag, mesajele pentru erorile de browser și --sterge-sesiunea.
+"""Teste pentru linia de comandă: validarea lui --prag, mesajele pentru erorile de browser, --sterge-sesiunea, --aplicatie și
+combinațiile refuzate ale opțiunilor exclusive (--sterge-sesiunea, --aplicatie, --actualizeaza, --versiune).
 
 Fără browser: `run` se înlocuiește cu o funcție care ridică eroarea dorită. Valorile sunt inventate.
 La --sterge-sesiunea profilul de test stă într-un folder temporar; `input` se înlocuiește, deci nu se așteaptă tastatura.
+Fluxul complet al lui --actualizeaza și --versiune e în test_cli_update.py.
 """
 
 import errno
@@ -81,7 +83,52 @@ def test_fara_confirmare_alone_is_refused(capsys):
     with pytest.raises(SystemExit) as stop:
         ruleaza._parse_args(["--fara-confirmare"])
     assert stop.value.code == 2
-    assert "--fara-confirmare se folosește doar împreună cu --sterge-sesiunea" in capsys.readouterr().err
+    assert "--fara-confirmare se folosește doar împreună cu --sterge-sesiunea sau --actualizeaza" in capsys.readouterr().err
+
+
+# ---------- --actualizeaza și --versiune: exclusive, ca --sterge-sesiunea ----------
+
+_ALL_OTHER_OPTIONS = [*_OTHER_OPTIONS, ["--aplicatie"], ["--fara-browser"], ["--sterge-sesiunea"]]
+
+
+@pytest.mark.parametrize("other", [*_ALL_OTHER_OPTIONS, ["--versiune"]], ids=[o[0] for o in [*_ALL_OTHER_OPTIONS, ["--versiune"]]])
+def test_actualizeaza_is_exclusive(other, capsys):
+    """--actualizeaza schimbă fișierele programului: nu se amestecă cu nimic altceva, în nicio ordine (doar --fara-confirmare)."""
+    for argv in (["--actualizeaza", *other], [*other, "--actualizeaza"]):
+        with pytest.raises(SystemExit) as stop:
+            ruleaza._parse_args(argv)
+        assert stop.value.code == 2
+        error = capsys.readouterr().err
+        assert "nu se combină cu" in error and other[0] in error and "--actualizeaza" in error
+
+
+@pytest.mark.parametrize("other", [*_ALL_OTHER_OPTIONS, ["--fara-confirmare"]], ids=[o[0] for o in [*_ALL_OTHER_OPTIONS, ["--fara-confirmare"]]])
+def test_versiune_is_used_alone(other, capsys):
+    """--versiune doar scrie versiunea: orice opțiune în plus e refuzată, cu mesaj în română."""
+    with pytest.raises(SystemExit) as stop:
+        ruleaza._parse_args(["--versiune", *other])
+    assert stop.value.code == 2
+    error = capsys.readouterr().err
+    assert "nu se combină cu" in error and other[0] in error
+
+
+def test_versiune_message_says_it_is_used_alone(capsys):
+    with pytest.raises(SystemExit):
+        ruleaza._parse_args(["--versiune", "--demo"])
+    assert "--versiune nu se combină cu --demo (se folosește singură)" in capsys.readouterr().err
+
+
+def test_actualizeaza_accepts_only_fara_confirmare_beside_it():
+    args = ruleaza._parse_args(["--actualizeaza", "--fara-confirmare"])
+    assert args.actualizeaza and args.fara_confirmare and not args.sterge_sesiunea
+    assert ruleaza._parse_args(["--actualizeaza"]).fara_confirmare is False
+    assert ruleaza._parse_args(["--versiune"]).versiune
+
+
+def test_actualizeaza_error_names_the_allowed_companion(capsys):
+    with pytest.raises(SystemExit):
+        ruleaza._parse_args(["--actualizeaza", "--demo"])
+    assert "--actualizeaza nu se combină cu --demo (doar cu --fara-confirmare)" in capsys.readouterr().err
 
 
 def test_an_explicit_prag_equal_to_the_default_still_counts_as_given(capsys):
@@ -326,6 +373,16 @@ def test_aplicatie_says_why_it_stopped(fake_app, capsys, reason, text):
     FakeAppServer.reason = reason
     assert ruleaza.main(["--aplicatie", "--fara-browser"]) == 0
     assert text in capsys.readouterr().out
+
+
+def test_aplicatie_stopped_after_an_update_exits_with_the_restart_code(fake_app, capsys):
+    """Oprirea cu STOP_UPDATED (actualizare instalată din pagină) iese cu settings.EXIT_CODE_RESTART, ca lansatorul să pornească varianta nouă (D12)."""
+    from emag_spend.app_server import STOP_UPDATED
+
+    FakeAppServer.reason = STOP_UPDATED
+    assert ruleaza.main(["--aplicatie", "--fara-browser"]) == settings.EXIT_CODE_RESTART == 75
+    output = capsys.readouterr().out
+    assert "Programul a fost actualizat" in output and "pornește-l tu din nou" in output and "Traceback" not in output
 
 
 @pytest.mark.parametrize("error", [OSError("adresa nu poate fi legată"), ValueError("variabila EMAG_APP_IDLE_MINUTES trebuie să fie un număr")], ids=["OSError", "ValueError"])

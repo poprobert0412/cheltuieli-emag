@@ -17,16 +17,16 @@
   "grupe": {
     "missing_paid_total": {
       "title": "Comenzi la care lipsește „Total plătit”",
-      "explanation": "Pagina comenzii nu arată suma plătită pentru un vânzător, deși produsele au fost livrate, ridicate sau sunt în curs. Programul nu poate verifica dacă suma plătită se potrivește cu produsele, voucherele și transportul.",
+      "explanation": "Pagina comenzii nu arată suma plătită pentru un vânzător, deși produsele au fost livrate, ridicate sau sunt în curs. La un bloc livrat sau ridicat, suma plătită se calculează atunci din componente (produse, reduceri, transport și taxe) și intră așa în „cât ai cheltuit”; programul nu o poate verifica cu pagina.",
       "affects_totals": false,
-      "what_to_do": "Deschide comanda pe eMAG și compară-o cu „Total plătit” de acolo. Totalurile principale (comandat, păstrat) se calculează din produse și nu depind de această sumă; doar „Total plătit eMAG” din cifrele de control poate ieși mai mic decât în realitate.",
+      "what_to_do": "Deschide comanda pe eMAG și compară-o cu „Total plătit” de acolo. De obicei suma din componente e exactă; poate diferi doar dacă pagina are o reducere sau o taxă pe care programul nu o recunoaște.",
       "item_text": "{seller}: blocul nu afișează „Total plătit” ({status})"
     },
     "header_total_mismatch": {
       "title": "Comenzi la care totalul din antet nu e egal cu suma blocurilor",
       "explanation": "Totalul scris în partea de sus a comenzii diferă de suma sumelor plătite ale vânzătorilor din ea. Cauza cea mai frecventă: comanda are un bloc anulat, iar antetul include încă „Total de plată” al acelui bloc (atunci nu e o problemă). Alte cauze posibile: o reducere sau o taxă pe care programul nu a recunoscut-o, un bloc fără „Total plătit” sau o comandă modificată după plasare.",
       "affects_totals": false,
-      "what_to_do": "La comenzile fără bloc anulat, deschide comanda pe eMAG și verifică totalul. Produsele și cantitățile (din care se calculează „păstrat”) nu depind de total; diferența afectează doar cifrele de control.",
+      "what_to_do": "La comenzile fără bloc anulat, deschide comanda pe eMAG și verifică totalul. „Cât ai cheltuit” se calculează din „Total plătit” al fiecărui bloc, nu din antet; diferența afectează doar această verificare.",
       "item_text": "total din antet {header}, suma blocurilor {blocks}"
     },
     "pending_return_without_result": {
@@ -38,16 +38,16 @@
     },
     "completed_return_without_refund": {
       "title": "Retururi finalizate fără sumă restituită afișată",
-      "explanation": "Returul e finalizat, dar pagina lui nu spune ce sumă s-a restituit. Produsul e scăzut din „păstrat” la prețul lui din comandă, însă suma restituită nu apare în cifrele de control.",
+      "explanation": "Returul e finalizat, dar pagina lui nu spune ce sumă s-a restituit. Produsul trece la „returnat”. Dacă banii s-au întors în cont, „cât ai cheltuit” presupune că ți s-a restituit partea plătită a produsului (prețul minus partea lui din reduceri), cum face eMAG la retururile cu sumă afișată; estimarea e numărată separat în cifrele de control. La un retur cu voucher sau sold eMAG suma nu contează: nu se scade nimic.",
       "affects_totals": false,
-      "what_to_do": "Dacă vrei să verifici, deschide returul pe eMAG și compară suma restituită cu prețul produsului.",
+      "what_to_do": "Dacă vrei să verifici, deschide returul pe eMAG și compară suma restituită cu partea plătită a produsului.",
       "item_text": "retur finalizat pentru {products}; mod de restituire: {mode}"
     },
     "other": {
       "title": "Alte avertismente",
       "explanation": "Mesaje care nu intră în celelalte grupe: o sumă care nu se potrivește, un status necunoscut, produse fără categorie sau o greșeală de configurare. Grupa e marcată ca „afectează totalurile” doar dacă vreun mesaj din ea spune că o cifră din raport poate fi greșită.",
       "affects_totals": false,
-      "what_to_do": "Citește fiecare rând. Dacă numește o comandă, deschide-o pe eMAG și compară-o cu ce arată raportul; dacă vorbește de categorii, adaugă regula în config/categorii.json.",
+      "what_to_do": "Citește fiecare rând. Dacă numește o comandă, deschide-o pe eMAG și compară-o cu ce arată raportul; dacă vorbește de categorii, adaugă regula în config/categorii.personal.json, fișierul tău, pe care actualizarea îl păstrează.",
       "item_text": "{text}"
     }
   }

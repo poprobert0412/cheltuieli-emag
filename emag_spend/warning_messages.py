@@ -2,7 +2,7 @@
 
 Primește: valorile din mesaj (număr comandă, vânzător, sume în bani, numere). Dă înapoi: textul (`format_*`)
 sau, dintr-un text, un `ParsedWarning` cu comanda, vânzătorul, tipul grupei și dacă poate afecta totalurile.
-Producătorii (order_parser.py, spend_analysis.py) și consumatorul (warning_details.py) folosesc ACEST fișier;
+Producătorii (order_parser.py, spend_analysis.py, paid_totals.py) și consumatorul (warning_details.py) folosesc ACEST fișier;
 expresiile de citire se construiesc din aceleași șabloane, deci o formulare nouă o urmează singură (teste dus-întors).
 Ce NU face: nu decide ce grupe se afișează, nu citește fișiere, nu calculează sume.
 """
@@ -50,9 +50,19 @@ _REFUNDS_WITHOUT_AMOUNT_ONE = "1 retur finalizat fără sumă restituită afișa
 _REFUNDS_WITHOUT_AMOUNT_MANY = "{count} retururi finalizate fără sumă restituită afișată"
 _HEADER_MISMATCH_ONE = "1 comandă la care totalul din antet ≠ suma blocurilor"
 _HEADER_MISMATCH_MANY = "{count} comenzi la care totalul din antet ≠ suma blocurilor"
+_UNKNOWN_REFUND_MODE = (
+    _RETURN_PREFIX + "mod de restituire necunoscut („{mode}”), tratat ca bani primiți înapoi (adaugă-l în config/restituiri.json)"
+)
 _HIGHLIGHT_MISSING = "categoria evidențiată «{name}» nu există în config/categorii.json: totalul ei apare 0"
 _FUNNEL_NOT_CLOSING = "lanțul sumelor nu se închide: comandat {ordered} ≠ părți {parts}"
-_UNCATEGORIZED = "{count} produse necategorizate (adaugă reguli în config/categorii.json)"
+_PAID_NOT_CLOSING = "lanțul sumelor plătite nu se închide ({check}): {computed} ≠ părți {parts}"
+# Regulile noi merg în fișierul personal (decis 6 oct. 2026, N15): actualizarea îl păstrează, pe când config/categorii.json e un
+# fișier al programului și se înlocuiește la fiecare versiune nouă, cu tot ce ar fi scris omul în el.
+_UNCATEGORIZED = "{count} produse necategorizate (adaugă reguli în config/categorii.personal.json)"
+
+# Cele două căi pe care paid_totals.py recalculează plătitul efectiv, ca să-l compare cu suma părților lui.
+PAID_CHECK_CHAIN = "comandat − scăzute + transport și taxe"
+PAID_CHECK_BLOCKS = "blocuri livrate − bani primiți înapoi"
 
 
 def _pattern(template: str, **fields: str) -> re.Pattern:
@@ -88,9 +98,10 @@ _RETURN_RE = _pattern(_RETURN_PREFIX + "{detail}", return_id=_DIGITS, detail=".*
 
 # Mesajele care spun că o cifră din raport poate fi greșită (produse lipsă sau cu sumă care nu
 # se leagă, pagină greșită, status necunoscut, lanț care nu se închide, retur nepotrivit). Restul
-# (suma plătită, categorii, numărul de nume) sunt informative: totalul „păstrat” nu depinde de ele.
+# (total plătit ≠ componente, categorii, numărul de nume) sunt informative: plătitul efectiv folosește
+# suma plătită afișată în pagină, iar categoriile nu schimbă totalul.
 _AFFECTING_DETAIL_STARTS = ("suma produselor", "niciun produs", "nicio secțiune", "numărul din pagină")
-_AFFECTING_TEXT_STARTS = ("status necunoscut la comanda", "lanțul sumelor nu se închide")
+_AFFECTING_TEXT_STARTS = ("status necunoscut la comanda", "lanțul sumelor nu se închide", "lanțul sumelor plătite nu se închide")
 
 
 @dataclass(frozen=True)
@@ -177,14 +188,24 @@ def format_header_mismatches(count: int) -> str:
     return _HEADER_MISMATCH_ONE if count == 1 else _HEADER_MISMATCH_MANY.format(count=count)
 
 
+def format_unknown_refund_mode(return_id: str, mode: str | None) -> str:
+    """Modul de restituire al unui retur finalizat nu e în config/restituiri.json (se tratează ca bani înapoi)."""
+    return _UNKNOWN_REFUND_MODE.format(return_id=return_id, mode=(mode or "").strip() or "necompletat")
+
+
 def format_highlight_category_missing(name: str) -> str:
     """Categoria evidențiată nu există în regulile de categorii."""
     return _HIGHLIGHT_MISSING.format(name=name)
 
 
 def format_funnel_not_closing(ordered_bani: int, parts_bani: int) -> str:
-    """Lanțul comandat → păstrat nu se închide (sumele apar în lei)."""
+    """Lanțul comandat → păstrat (la preț de listă) nu se închide (sumele apar în lei)."""
     return _FUNNEL_NOT_CLOSING.format(ordered=format_lei(ordered_bani), parts=format_lei(parts_bani))
+
+
+def format_paid_not_closing(check: str, computed_bani: int, parts_bani: int) -> str:
+    """Plătitul efectiv recalculat pe calea `check` (PAID_CHECK_*) ≠ suma părților lui (sumele apar în lei)."""
+    return _PAID_NOT_CLOSING.format(check=check, computed=format_lei(computed_bani), parts=format_lei(parts_bani))
 
 
 def format_uncategorized(count: int) -> str:

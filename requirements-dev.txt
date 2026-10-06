@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 # Pentru cine dezvoltă sau rulează testele (pytest). Include tot ce e în requirements.txt.
-# Instalare: .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+# Instalare, după prima pornire a lansatorului (care creează .venv cu uv):
+#   Windows: .uv\bin\uv.exe pip install --cache-dir .uv\cache --python .venv\Scripts\python.exe --only-binary :all: -r requirements-dev.txt
+#   macOS/Linux: .uv/bin/uv pip install --cache-dir .uv/cache --python .venv/bin/python --only-binary :all: -r requirements-dev.txt
 # Versiunile sunt fixate (din pip freeze); colorama e cerută de pytest doar pe Windows.
 -r requirements.txt
-pytest==9.0.3
+pytest==9.1.1
 iniconfig==2.3.0
 packaging==26.3
 pluggy==1.6.0

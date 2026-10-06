@@ -187,6 +187,10 @@
 .emag-dash .ed-big { font-size: clamp(40px, 8vw, 64px); font-size: clamp(40px, 11cqi, 68px); font-weight: 700; line-height: 1.05; }
 .emag-dash .ed-cents { margin-left: 1px; font-size: clamp(20px, 3.4vw, 28px); font-size: clamp(20px, 4.6cqi, 30px); font-weight: 600; color: var(--ed-ink-2); }
 .emag-dash .ed-lead { color: var(--ed-ink); font-size: 15px; max-width: 70ch; text-wrap: pretty; }
+/* descompunerea cifrei mari: preț de listă, reduceri, transport și taxe (rânduri scurte, care se rup între ele, nu în ele) */
+.emag-dash .ed-hero-parts { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--ed-ink-2); }
+.emag-dash .ed-hero-parts li { min-width: 0; }
+.emag-dash .ed-hero-part-v { color: var(--ed-ink); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .emag-dash .ed-meta-line { color: var(--ed-muted); font-size: 12.5px; }
 .emag-dash .ed-hero-warn { color: var(--ed-note-ink); background: var(--ed-note-bg); border: 1px solid var(--ed-note-border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
 
@@ -226,6 +230,10 @@
 .emag-dash .ed-bar-fill { display: block; height: 100%; background: var(--ed-s1); border-radius: 0 4px 4px 0; min-width: 2px; }
 .emag-dash .ed-bar-row:hover .ed-bar-fill,
 .emag-dash .ed-bar-row:focus-visible .ed-bar-fill { filter: brightness(1.12); }
+/* rândurile care nu sunt produse („Transport și taxe”…) vin după categorii, despărțite de ele printr-o linie */
+.emag-dash .ed-bar-row:not(.ed-bar-extra) + .ed-bar-extra { border-top: 1px solid var(--ed-grid); border-radius: 0 0 6px 6px; padding-top: 10px; }
+.emag-dash .ed-extra-notes { display: grid; gap: 4px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--ed-grid); font-size: 12.5px; color: var(--ed-ink-2); }
+.emag-dash .ed-extra-notes strong { color: var(--ed-ink); font-weight: 600; }
 
 /* ---------- tabele ---------- */
 .emag-dash .ed-tbl-wrap { overflow-x: auto; border: 1px solid var(--ed-border); border-radius: 8px; background: var(--ed-surface); max-width: 100%; }
@@ -326,6 +334,26 @@
 }
 .emag-dash .ed-olink:hover { text-decoration-thickness: 2px; background: var(--ed-ghost-2); }
 .emag-dash .ed-ext { flex: none; font-size: 0.9em; line-height: 1; text-decoration: none; }
+
+/* ---------- numele produselor ca linkuri spre comandă (productLink din dashboard.js) ----------
+   Arată ca textul din jur; la hover și la focus de la tastatură se face albastru (--ed-link, ≥ 4,5:1 pe fundal și pe rândul
+   evidențiat, în ambele teme) și subliniat, cu cursorul de link. Pe un ecran fără hover (telefon) o subliniere discretă arată
+   că se poate apăsa. Zona de atingere are cel puțin 24 px înălțime (WCAG 2.5.8), iar pe ecran tactil --ed-target. */
+.emag-dash .ed-plink {
+  display: inline-block; max-width: 100%; min-height: 24px; padding-block: 2px;
+  color: inherit; text-decoration: none; cursor: pointer; border-radius: 4px; touch-action: manipulation;
+}
+.emag-dash .ed-plink:focus-visible { color: var(--ed-link); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+@media (hover: hover) {
+  .emag-dash .ed-plink:hover { color: var(--ed-link); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+}
+@media (hover: none) {
+  .emag-dash .ed-plink { text-decoration: underline; text-decoration-color: var(--ed-border-strong); text-underline-offset: 3px; }
+  .emag-dash .ed-plink:active { color: var(--ed-link); }
+}
+@media (pointer: coarse) {
+  .emag-dash .ed-plink { min-height: var(--ed-target); padding-block: 10px; }
+}
 .emag-dash .ed-links { display: flex; flex-wrap: wrap; gap: 0 14px; }
 .emag-dash .ed-orderline { display: block; }
 .emag-dash .ed-sub { display: block; color: var(--ed-muted); font-size: 12px; font-weight: 400; }
@@ -360,15 +388,17 @@
 .emag-dash .ed-input::placeholder { color: var(--ed-muted); opacity: 1; }
 .emag-dash .ed-tbl-prices th { white-space: normal; }
 .emag-dash .ed-tbl-prices td.ed-name { min-width: 200px; }
-.emag-dash .ed-tbl-prices td.ed-name .ed-sub { margin-left: calc(1em + 8px); } /* categoria sub numele, aliniată cu textul (după săgeată) */
+.emag-dash .ed-tbl-prices td.ed-name .ed-sub { margin-left: calc(var(--ed-target) + 4px); } /* categoria sub numele, aliniată cu textul (după săgeată) */
 .emag-dash .ed-tiles-4 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); } /* 4 cifre-cheie pe un rând când încap */
+/* rândul unui produs: săgeata (buton) deschide istoricul, numele (link) duce la comanda cea mai recentă */
+.emag-dash .ed-ph-name { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .emag-dash .ed-ph-open {
-  display: flex; align-items: flex-start; gap: 8px; width: 100%; min-height: var(--ed-target); padding: 6px 0; text-align: left;
-  background: none; border: 0; color: var(--ed-ink); font-weight: 600; cursor: pointer; border-radius: 6px; scroll-margin-block: var(--ed-scroll-margin);
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--ed-target); min-height: var(--ed-target); padding: 0;
+  background: none; border: 0; color: var(--ed-muted); cursor: pointer; border-radius: 6px; scroll-margin-block: var(--ed-scroll-margin);
 }
-.emag-dash .ed-ph-open:hover .ed-pname { text-decoration: underline; }
-.emag-dash .ed-chev { flex: none; width: 1em; font-size: 12px; line-height: 1.7; color: var(--ed-muted); }
-.emag-dash .ed-pname { min-width: 0; overflow-wrap: anywhere; }
+.emag-dash .ed-ph-open:hover { background: var(--ed-ghost-2); color: var(--ed-ink); }
+.emag-dash .ed-chev { flex: none; font-size: 12px; line-height: 1; }
+.emag-dash .ed-pname { min-width: 0; overflow-wrap: anywhere; font-weight: 600; color: var(--ed-ink); }
 .emag-dash .ed-delta { display: block; font-weight: 600; }
 .emag-dash .ed-arrow { font-size: 10px; color: var(--ed-muted); }
 .emag-dash .ed-ph-detail td.ed-ph-cell { background: var(--ed-ghost); }

@@ -17,6 +17,10 @@ from emag_spend.classifier import Classifier
     ("Comanda plasata", block_status.IN_PROGRESS),
     ("Produse predate curierului | AWB: 123", block_status.IN_PROGRESS),
     ("Produse in drum spre showroom", block_status.IN_PROGRESS),
+    ("Produse ajunse in showroom", block_status.IN_PROGRESS),  # sosite la punctul de ridicare, încă neridicate
+    ("Produse ajunse în easybox", block_status.IN_PROGRESS),
+    ("Produse ajunse la punctul de ridicare", block_status.IN_PROGRESS),
+    ("Produse ajunse in showroom | Produse ridicate", block_status.DELIVERED),  # după ridicare contează „ridicate”
     ("Am trimis cererea de anulare catre X (fara confirmare)", block_status.UNKNOWN),
     ("ceva nou si necunoscut", block_status.UNKNOWN),
     ("", block_status.UNKNOWN),

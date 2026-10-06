@@ -22,12 +22,16 @@ SECRET_MARKER = "SECRET-INVENTAT-DIN-AFARA-IESIRILOR"
 NESTED_JSON = "[" * 100000
 
 
-def make_run(base: Path, run_id: str, *, orders: int | None = 12, kept_bani: int | None = 345600, report: bool = True, extra: dict[str, str] | None = None) -> Path:
-    """Un folder de rulare inventat; `orders=None` înseamnă fără analiza.json."""
+def make_run(base: Path, run_id: str, *, orders: int | None = 12, kept_bani: int | None = 345600, spent_bani: int | None = None,
+             report: bool = True, extra: dict[str, str] | None = None) -> Path:
+    """Un folder de rulare inventat; `orders=None` înseamnă fără analiza.json; `spent_bani=None` = analiză veche, fără secțiunea `paid`."""
     folder = base / run_id
     folder.mkdir(parents=True)
     if orders is not None:
-        (folder / "analiza.json").write_text(json.dumps({"meta": {"orders": orders}, "funnel": {"kept_bani": kept_bani}}), encoding="utf-8")
+        analysis = {"meta": {"orders": orders}, "funnel": {"kept_bani": kept_bani}}
+        if spent_bani is not None:
+            analysis["paid"] = {"spent_bani": spent_bani, "spent_units": 4}
+        (folder / "analiza.json").write_text(json.dumps(analysis), encoding="utf-8")
     if report:
         (folder / "raport.html").write_text("<html>raport inventat</html>", encoding="utf-8")
     for name, content in (extra or {}).items():
@@ -64,15 +68,18 @@ def outputs(tmp_path) -> Path:
 # ---------- lista ----------
 
 def test_list_has_the_contract_fields_newest_first(outputs):
-    """GET /api/runs: id, created_at, kind, orders, kept_bani, has_report; cele mai noi întâi."""
+    """GET /api/runs: id, created_at, kind, orders, kept_bani, spent_bani, has_report; cele mai noi întâi.
+
+    `spent_bani` vine din `paid.spent_bani` (analizele noi) și e null la analizele vechi, fără secțiunea `paid`.
+    """
     make_run(outputs, RUN_A)
-    make_run(outputs, RUN_B, orders=7, kept_bani=1000)
+    make_run(outputs, RUN_B, orders=7, kept_bani=1000, spent_bani=950)
     make_run(outputs, RUN_C, orders=20, kept_bani=5000, report=False)
     runs = app_runs.RunsStore(outputs).list_runs()
     assert [run["id"] for run in runs] == [RUN_C, RUN_B, RUN_A]
-    assert runs[0] == {"id": RUN_C, "created_at": "2026-10-06T08:00:00", "kind": "real", "orders": 20, "kept_bani": 5000, "has_report": False}
-    assert runs[1] == {"id": RUN_B, "created_at": "2026-10-05T12:30:15", "kind": "demo", "orders": 7, "kept_bani": 1000, "has_report": True}
-    assert set(runs[2]) == {"id", "created_at", "kind", "orders", "kept_bani", "has_report"}
+    assert runs[0] == {"id": RUN_C, "created_at": "2026-10-06T08:00:00", "kind": "real", "orders": 20, "kept_bani": 5000, "spent_bani": None, "has_report": False}
+    assert runs[1] == {"id": RUN_B, "created_at": "2026-10-05T12:30:15", "kind": "demo", "orders": 7, "kept_bani": 1000, "spent_bani": 950, "has_report": True}
+    assert set(runs[2]) == {"id", "created_at", "kind", "orders", "kept_bani", "spent_bani", "has_report"}
 
 
 def test_folders_with_invalid_names_files_and_stray_entries_are_ignored(outputs):
@@ -92,20 +99,21 @@ def test_a_missing_outputs_folder_gives_an_empty_list(tmp_path):
 
 
 def test_an_interrupted_run_without_analysis_is_listed_with_null_numbers(outputs):
-    """O rulare oprită la jumătate (fără analiza.json) apare în listă, cu orders și kept_bani null și fără raport."""
+    """O rulare oprită la jumătate (fără analiza.json) apare în listă, cu orders, kept_bani și spent_bani null și fără raport."""
     make_run(outputs, RUN_A, orders=None, report=False, extra={"comenzi.json": "[]"})
     (run,) = app_runs.RunsStore(outputs).list_runs()
-    assert run["orders"] is None and run["kept_bani"] is None and run["has_report"] is False
+    assert run["orders"] is None and run["kept_bani"] is None and run["spent_bani"] is None and run["has_report"] is False
 
 
 @pytest.mark.parametrize("content", ["", "nu e json", "[1, 2]", "42", '{"meta": 5, "funnel": []}', '{"meta": {"orders": "12"}, "funnel": {"kept_bani": 1.5}}',
-                                     '{"meta": {"orders": true}, "funnel": {"kept_bani": null}}', '{"meta": {"orders": NaN}}', "﻿{}", "IMBRICAT"])
+                                     '{"meta": {"orders": true}, "funnel": {"kept_bani": null}}', '{"meta": {"orders": NaN}}', "﻿{}", "IMBRICAT",
+                                     '{"paid": [1]}', '{"paid": {"spent_bani": "950"}}', '{"paid": {"spent_bani": 9.5}}', '{"paid": {"spent_bani": false}}'])
 def test_a_broken_or_unexpected_analysis_does_not_break_the_list(outputs, content):
     """Analiză stricată, de alt tip, cu NaN sau imbricată absurd: rularea rămâne în listă, cifrele devin null, iar lista nu pică."""
     folder = make_run(outputs, RUN_A, orders=None)
     (folder / "analiza.json").write_text(NESTED_JSON if content == "IMBRICAT" else content, encoding="utf-8")
     (run,) = app_runs.RunsStore(outputs).list_runs()
-    assert run["id"] == RUN_A and run["orders"] is None and run["kept_bani"] is None, f"cifre luate dintr-o analiză nevalidă: {run}"
+    assert run["id"] == RUN_A and run["orders"] is None and run["kept_bani"] is None and run["spent_bani"] is None, f"cifre luate dintr-o analiză nevalidă: {run}"
 
 
 def test_an_oversized_analysis_is_not_read_for_the_list(outputs, monkeypatch):
@@ -113,15 +121,16 @@ def test_an_oversized_analysis_is_not_read_for_the_list(outputs, monkeypatch):
     make_run(outputs, RUN_A)
     monkeypatch.setattr(app_runs, "MAX_ANALYSIS_BYTES", 10)
     (run,) = app_runs.RunsStore(outputs).list_runs()
-    assert run["orders"] is None and run["kept_bani"] is None
+    assert run["orders"] is None and run["kept_bani"] is None and run["spent_bani"] is None
 
 
-def test_only_the_two_needed_fields_are_taken_from_the_analysis(outputs):
-    """Din analiza.json se iau doar meta.orders și funnel.kept_bani; restul (poate uriaș) nu ajunge în listă."""
+def test_only_the_three_needed_fields_are_taken_from_the_analysis(outputs):
+    """Din analiza.json se iau doar meta.orders, funnel.kept_bani și paid.spent_bani; restul (poate uriaș) nu ajunge în listă."""
     folder = make_run(outputs, RUN_A)
-    (folder / "analiza.json").write_text(json.dumps({"meta": {"orders": 3, "alt": "x"}, "funnel": {"kept_bani": 9}, "orders": {"cheie": "mare"}, "warnings": ["a"] * 50}), encoding="utf-8")
+    (folder / "analiza.json").write_text(json.dumps({"meta": {"orders": 3, "alt": "x"}, "funnel": {"kept_bani": 9}, "paid": {"spent_bani": 8, "extra_rows": [1] * 50},
+                                                     "orders": {"cheie": "mare"}, "warnings": ["a"] * 50}), encoding="utf-8")
     (run,) = app_runs.RunsStore(outputs).list_runs()
-    assert set(run) == {"id", "created_at", "kind", "orders", "kept_bani", "has_report"} and (run["orders"], run["kept_bani"]) == (3, 9)
+    assert set(run) == {"id", "created_at", "kind", "orders", "kept_bani", "spent_bani", "has_report"} and (run["orders"], run["kept_bani"], run["spent_bani"]) == (3, 9, 8)
 
 
 def test_the_list_is_capped_at_the_newest_runs(outputs, monkeypatch):

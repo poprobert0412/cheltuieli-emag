@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from playwright.async_api import Error as PlaywrightError
 
 from emag_spend import settings
-from emag_spend.browser_session import BrowserLaunchFailed, LoginTimeout
+from emag_spend.browser_session import MISSING_BROWSER_MARKERS, BrowserLaunchFailed, LoginTimeout, NoBrowserFound
 from emag_spend.page_fetcher import SessionExpired
 
 CODE_LOGIN_TIMEOUT = "login_timeout"
@@ -23,8 +23,8 @@ CODE_PROFILE_IN_USE = "profile_in_use"
 CODE_UNEXPECTED = "unexpected"
 ERROR_CODES = (CODE_LOGIN_TIMEOUT, CODE_SESSION_EXPIRED, CODE_BROWSER_MISSING, CODE_PROFILE_IN_USE, CODE_UNEXPECTED)
 
-# Fragmente (cu litere mici) din mesajele Playwright când browserul ales nu e instalat.
-BROWSER_MISSING_MARKERS = ("is not found at", "executable doesn't exist", "playwright install")
+# Fragmentele care înseamnă „browserul ales nu e instalat”: aceeași listă cu cea după care browser_session trece la următorul.
+BROWSER_MISSING_MARKERS = MISSING_BROWSER_MARKERS
 # Fragmente când profilul programului e deja deschis într-o fereastră Edge/Chrome: Chromium cedează procesului vechi și iese,
 # deci Playwright vede „browser închis” chiar la pornire.
 PROFILE_IN_USE_MARKERS = ("existing browser session", "processsingleton", "singletonlock", "already in use", "has been closed", "browser closed")
@@ -69,11 +69,17 @@ def classify_error(error: BaseException) -> RunError:
             "Ce faci: apasă din nou «Pornește analiza» și loghează-te când se deschide fereastra browserului."
         ))
     lowered = str(error).lower()
-    if isinstance(error, PlaywrightError) and any(marker in lowered for marker in BROWSER_MISSING_MARKERS):
+    if isinstance(error, NoBrowserFound) or (
+        isinstance(error, PlaywrightError) and any(marker in lowered for marker in BROWSER_MISSING_MARKERS)
+    ):
+        chosen = settings.BROWSER_CHANNEL
+        what = f"browserul «{chosen}», ales cu EMAG_BROWSER_CHANNEL," if chosen else "Edge, Chrome sau Chromium-ul programului"
         return RunError(CODE_BROWSER_MISSING, (
-            f"Nu găsesc browserul «{settings.BROWSER_CHANNEL}» pe acest calculator. "
-            "Ce faci: instalează Microsoft Edge (sau Google Chrome și pornește programul cu variabila de mediu "
-            "EMAG_BROWSER_CHANNEL=chrome), apoi apasă din nou «Pornește analiza»."
+            f"Nu găsesc {what} pe acest calculator. "
+            "Ce faci: instalează Microsoft Edge sau Google Chrome, ori pornește programul cu lansatorul "
+            "(porneste.bat, porneste.command sau porneste.sh), care descarcă singur Chromium"
+            + (" (sau scoate EMAG_BROWSER_CHANNEL, ca programul să aleagă singur)" if chosen else "")
+            + "; apoi apasă din nou «Pornește analiza»."
         ))
     if isinstance(error, BrowserLaunchFailed) and any(marker in lowered for marker in PROFILE_IN_USE_MARKERS):
         return RunError(CODE_PROFILE_IN_USE, (

@@ -53,3 +53,11 @@ def test_run_info_has_no_absolute_paths_as_the_page_says(demo_run_dir: Path):
     assert paths, "run_info.json n-are nicio cale: testul n-ar verifica nimic"
     assert not [value for value in paths if Path(value).is_absolute() or ":" in value], paths
     assert "numele contului tău Windows" in PAGE_TEXT
+
+
+def test_run_info_keeps_the_program_version_the_page_names(demo_run_dir: Path):
+    """Pagina spune că run_info.json are versiunea programului (program_version): cheia există și e versiunea de acum."""
+    from emag_spend.version import VERSION
+    info = json.loads((Path(demo_run_dir) / "run_info.json").read_text(encoding="utf-8"))
+    assert info.get("program_version") == VERSION, info.get("program_version")
+    assert "program_version" in PAGE_TEXT and "versiunea programului" in PAGE_TEXT

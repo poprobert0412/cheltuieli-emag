@@ -3,7 +3,7 @@
 Primește: nimic din afară (totul e inventat). Dă înapoi: `FakeAppServer` (stdlib, 127.0.0.1, port ales de sistem), care respectă
 contractul API din brief (token în X-App-Token, antet Host exact, Content-Type JSON și Origin la POST, fără CORS, aceleași
 antete de securitate, fișiere statice doar din lista albă a folderului interfata/) și o stare simulată pe care testul o
-conduce cu mâna (login în așteptare, progres, eroare, anulare, oprire); plus `launch_browser`, `attach_probe`, `open_app`, fixture-urile
+conduce cu mâna (login în așteptare, progres, eroare, anulare, oprire, versiune nouă și pașii actualizării); plus `launch_browser`, `attach_probe`, `open_app`, fixture-urile
 pytest `browser`, `fake` și `open_page` (importate în fiecare fișier de test) și sondele JavaScript rulate în pagină (contrast,
 ținte de atingere, depășire orizontală).
 Ce NU face: nu conține teste și nu pornește aplicația reală (emag_spend/app_server.py are testele lui). Serverul fals
@@ -28,7 +28,7 @@ from emag_spend import settings
 INTERFACE_DIR = settings.PROJECT_ROOT / "interfata"
 DEMO_DATA_JS = INTERFACE_DIR / "assets" / "demo-data.js"
 APP_PAGE = "/aplicatie.html"
-BROWSER_CHANNELS = (settings.BROWSER_CHANNEL, "msedge", "chrome")
+BROWSER_CHANNELS = tuple(c for c in (settings.BROWSER_CHANNEL, "msedge", "chrome") if c)  # gol = automat: Edge, apoi Chrome
 CAPTURES_ENV = "APP_UI_CAPTURES_DIR"  # folderul în care se salvează capturile (implicit: nu se salvează nimic)
 
 # Politica de conținut din brief, aplicată de aplicația reală pe fiecare răspuns; serverul fals o trimite la fel,
@@ -47,6 +47,9 @@ MAX_BODY_BYTES = 4096  # la POST, corpul e limitat la câțiva KB (contractul di
 RUN_ID_PATTERN = re.compile(r"^[0-9A-Za-z_-]{1,64}$")
 ALLOWED_FILES = ("raport.html", "produse.csv", "istoric_preturi.csv", "rezumat.txt")
 ACTIVE_STATES = ("starting", "waiting_login", "fetching_orders", "fetching_returns", "analyzing")
+# Stările aplicării actualizării în care nu pornește nicio analiză (ca app_update_job.APPLY_BLOCKING_STATES).
+UPDATE_BLOCKING_STATES = ("descarc", "verific", "instalez", "gata")
+FAKE_CURRENT_VERSION = "1.0.0"
 MAX_THRESHOLD_LEI = settings.MAX_BIG_PURCHASE_THRESHOLD_LEI  # aceeași regulă ca la --prag
 SESSION_DELETED_MESSAGE = "Sesiunea eMAG salvată a fost ștearsă. Data viitoare te vei loga din nou când pornești analiza."
 CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
@@ -87,10 +90,24 @@ def idle_state(session_saved: bool = False) -> dict:
             "run_id": None, "started_at": None, "error": None, "session_saved": session_saved}
 
 
+def update_state(status: str = "la-zi", *, latest: str | None = FAKE_CURRENT_VERSION, notes: str = "", page_url: str | None = None,
+                 message: str = "", apply_state: str = "inactiv", apply_message: str = "", to_version: str | None = None) -> dict:
+    """Răspunsul GET /api/update în forma din contract (app_update_job.UpdateJob.snapshot), cu valori inventate."""
+    return {
+        "current": FAKE_CURRENT_VERSION,
+        "check": {"status": status, "latest": latest, "notes": notes, "published": None, "page_url": page_url, "message": message},
+        "apply": {"state": apply_state, "message": apply_message, "to_version": to_version},
+    }
+
+
 def sample_runs() -> list[dict]:
-    """O listă de rulări anterioare inventate, cele mai noi întâi (forma din contractul GET /api/runs)."""
+    """O listă de rulări anterioare inventate, cele mai noi întâi (forma din contractul GET /api/runs).
+
+    Prima are și `spent_bani` (analiză nouă, cu „plătit efectiv”); a doua doar `kept_bani` (analiză veche, la preț de listă).
+    """
     return [
-        {"id": "2026-10-05_11-07-55_demo", "created_at": "2026-10-05T11:07:55", "kind": "demo", "orders": 177, "kept_bani": 1234567, "has_report": True},
+        {"id": "2026-10-05_11-07-55_demo", "created_at": "2026-10-05T11:07:55", "kind": "demo", "orders": 177, "kept_bani": 1234567,
+         "spent_bani": 1200000, "has_report": True},
         {"id": "2026-10-04_17-40-47", "created_at": "2026-10-04T17:40:47", "kind": "real", "orders": 25, "kept_bani": 98765, "has_report": True},
         {"id": "2026-10-03_09-00-00", "created_at": "2026-10-03T09:00:00", "kind": "real", "orders": None, "kept_bani": None, "has_report": False},
     ]
@@ -118,6 +135,8 @@ class FakeAppServer:
     version: str = "0.0-test"
     hello_override: dict | None = None
     hold_start: bool = False
+    update: dict = field(default_factory=update_state)
+    update_applies: int = 0
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _server: ThreadingHTTPServer | None = None
     _thread: threading.Thread | None = None
@@ -182,6 +201,11 @@ class FakeAppServer:
         """Schimbă câmpurile stării (state, message, progress, run_id, started_at, error, session_saved)."""
         with self._lock:
             self.state = {**self.state, **fields}
+
+    def set_update(self, snapshot: dict) -> None:
+        """Pune răspunsul GET /api/update (verificarea și starea aplicării), ca aplicația reală care avansează singură."""
+        with self._lock:
+            self.update = snapshot
 
     def api_requests(self) -> list:
         """Cererile către /api/* primite până acum."""
@@ -336,7 +360,7 @@ class _Handler(BaseHTTPRequestHandler):
     # ----- API: GET -----
 
     def _api_get(self, path: str) -> None:
-        """GET /api/hello, /api/state, /api/runs, /api/runs/<id>/analysis, /api/runs/<id>/files/<nume>."""
+        """GET /api/hello, /api/state, /api/runs, /api/update, /api/runs/<id>/analysis, /api/runs/<id>/files/<nume>."""
         if not self._token_ok():
             return self._error(401, "unauthorized", "Lipsește cheia de acces sau nu e bună.")
         if self._injected_failure(path):
@@ -352,6 +376,10 @@ class _Handler(BaseHTTPRequestHandler):
             with owner._lock:
                 runs = list(owner.runs)
             return self._json(200, runs)
+        if path == "/api/update":
+            with owner._lock:
+                update = json.loads(json.dumps(owner.update))
+            return self._json(200, update)
         match = re.fullmatch(r"/api/runs/([^/]+)/(analysis|files/([^/]+))", path)
         if not match or not RUN_ID_PATTERN.match(match.group(1)):
             return self._error(404, "not_found", "Nu există.")
@@ -371,7 +399,7 @@ class _Handler(BaseHTTPRequestHandler):
     # ----- API: POST -----
 
     def _api_post(self, path: str, body: dict) -> None:
-        """POST /api/runs, /api/runs/current/cancel, /api/session/delete, /api/shutdown."""
+        """POST /api/runs, /api/runs/current/cancel, /api/session/delete, /api/update/apply, /api/shutdown."""
         owner = self.owner
         if path == "/api/runs":
             return self._start_run(body)
@@ -388,12 +416,30 @@ class _Handler(BaseHTTPRequestHandler):
                 owner.deleted_sessions += 1
                 owner.state = {**owner.state, "session_saved": False}
             return self._json(200, {"status": "deleted", "message": SESSION_DELETED_MESSAGE, "session_saved": False})
+        if path == "/api/update/apply":
+            return self._apply_update()
         if path == "/api/shutdown":
             owner.shutdown_requested = True
             self._json(200, {"stopping": True})
             threading.Thread(target=owner.stop, daemon=True).start()  # ca aplicația reală: răspunde, apoi se oprește
             return None
         return self._error(404, "not_found", "Nu există.")
+
+    def _apply_update(self) -> None:
+        """POST /api/update/apply: aceleași 409 ca aplicația reală; altfel trece în „descarc” și răspunde 202 {"apply": ...}."""
+        owner = self.owner
+        with owner._lock:
+            if owner.update["apply"]["state"] in UPDATE_BLOCKING_STATES:
+                return self._error(409, "update_in_progress", "Actualizarea e deja în curs.")
+            if owner.state["state"] in ACTIVE_STATES:
+                return self._error(409, "run_in_progress", "Actualizarea nu poate porni cât rulează o analiză. Așteaptă să se termine sau oprește-o.")
+            if owner.update["check"]["status"] != "noua":
+                return self._error(409, "no_update", "Nu există o versiune nouă de instalat.")
+            latest = owner.update["check"]["latest"]
+            owner.update_applies += 1
+            owner.update = {**owner.update, "apply": {"state": "descarc", "message": f"Descarc versiunea {latest}…", "to_version": latest}}
+            apply = dict(owner.update["apply"])
+        return self._json(202, {"apply": apply})
 
     def _start_run(self, body: dict) -> None:
         """POST /api/runs: validează ca --prag, refuză cu 409 dacă rulează deja una, altfel pornește („starting”) și răspunde 202."""
@@ -409,6 +455,8 @@ class _Handler(BaseHTTPRequestHandler):
         with owner._lock:
             if owner.state["state"] in ACTIVE_STATES:
                 return self._error(409, "run_in_progress", "O analiză rulează deja. Așteaptă să se termine sau oprește-o.")
+            if owner.update["apply"]["state"] in UPDATE_BLOCKING_STATES:
+                return self._error(409, "update_in_progress", "Se instalează o actualizare a programului; analiza poate porni după ce aplicația repornește.")
         run_id = owner.next_run_id()
         with owner._lock:
             owner.started.append({"mode": mode, "threshold_lei": threshold, "run_id": run_id})

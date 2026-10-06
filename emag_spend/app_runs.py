@@ -1,7 +1,8 @@
 """Rulările anterioare din iesiri/: lista lor și citirea sigură a analizei și a fișierelor descărcabile, pentru aplicația locală.
 
 Primește: folderul iesiri/ și, la citire, id-ul rulării (numele folderului) și numele fișierului. Dă înapoi: lista
-`[{id, created_at, kind, orders, kept_bani, has_report}]`, conținutul analiza.json (octeți JSON valid) sau un fișier
+`[{id, created_at, kind, orders, kept_bani, spent_bani, has_report}]` (`spent_bani` = „plătit efectiv” din analizele noi,
+None la cele vechi, fără secțiunea `paid`), conținutul analiza.json (octeți JSON valid) sau un fișier
 din lista albă (octeți + tip). Citește doar din iesiri/: ignoră folderele cu nume invalid, nu urmează legături simbolice
 sau joncțiuni, verifică după `resolve` că niciun drum nu iese din iesiri/, limitează mărimea fișierelor și tolerează
 fișierele lipsă sau stricate (o rulare întreruptă apare în listă fără cifre, nu strică lista).
@@ -65,7 +66,7 @@ class RunsStore:
     def __init__(self, outputs_dir: Path):
         """`outputs_dir` poate să nu existe încă (prima rulare): lista e atunci goală."""
         self._outputs_dir = Path(outputs_dir)
-        self._summaries: dict[str, tuple[tuple[int, int], tuple[int | None, int | None]]] = {}
+        self._summaries: dict[str, tuple[tuple[int, int], tuple[int | None, int | None, int | None]]] = {}
         self._lock = threading.Lock()
 
     def _base(self) -> Path | None:
@@ -148,35 +149,38 @@ class RunsStore:
             raise RunNotFound(f"rularea {run_id!r} nu are fișierul {name!r}")
         return data, content_type
 
-    def _summary(self, run_dir: Path, run_id: str) -> tuple[int | None, int | None]:
-        """(comenzi, bani păstrați) din analiza.json, sau (None, None) dacă lipsește, e prea mare ori stricată.
+    def _summary(self, run_dir: Path, run_id: str) -> tuple[int | None, int | None, int | None]:
+        """(comenzi, bani păstrați, bani plătiți efectiv) din analiza.json; None pe fiecare câmp care lipsește, iar (None, None, None)
+        dacă fișierul lipsește, e prea mare ori stricat. Analizele vechi n-au secțiunea `paid`: acolo „plătit efectiv” e None.
 
         Reține rezultatul după (data modificării, mărime): lista se cere des, iar analiza nu se schimbă după ce se scrie.
         """
+        empty: tuple[int | None, int | None, int | None] = (None, None, None)
         path = run_dir / ANALYSIS_FILE
         try:
             info = os.lstat(path)
         except OSError:
-            return None, None
+            return empty
         if not stat.S_ISREG(info.st_mode) or _is_link_like(path) or info.st_size > MAX_ANALYSIS_BYTES:
-            return None, None
+            return empty
         signature = (info.st_mtime_ns, info.st_size)
         with self._lock:
             cached = self._summaries.get(run_id)
         if cached and cached[0] == signature:
             return cached[1]
-        result: tuple[int | None, int | None] = (None, None)
+        result = empty
         try:
             data = self._read_file(run_dir, ANALYSIS_FILE, MAX_ANALYSIS_BYTES)
             parsed = app_security.parse_strict_json(data) if data is not None else None
             if isinstance(parsed, dict):
-                meta, funnel = parsed.get("meta"), parsed.get("funnel")
+                meta, funnel, paid = parsed.get("meta"), parsed.get("funnel"), parsed.get("paid")
                 result = (
                     _plain_int(meta.get("orders")) if isinstance(meta, dict) else None,
                     _plain_int(funnel.get("kept_bani")) if isinstance(funnel, dict) else None,
+                    _plain_int(paid.get("spent_bani")) if isinstance(paid, dict) else None,
                 )
         except (RunFileUnreadable, ValueError, RecursionError):
-            result = (None, None)
+            result = empty
         with self._lock:
             self._summaries[run_id] = (signature, result)
         return result
@@ -199,7 +203,7 @@ class RunsStore:
             parsed = run_ids.parse_run_id(run_id)
             if run_dir is None or parsed is None:
                 continue
-            orders, kept_bani = self._summary(run_dir, run_id)
+            orders, kept_bani, spent_bani = self._summary(run_dir, run_id)
             report = run_dir / REPORT_FILE
             runs.append({
                 "id": run_id,
@@ -207,6 +211,7 @@ class RunsStore:
                 "kind": "demo" if parsed.demo else "real",
                 "orders": orders,
                 "kept_bani": kept_bani,
+                "spent_bani": spent_bani,
                 "has_report": report.is_file() and not _is_link_like(report),
             })
         return runs

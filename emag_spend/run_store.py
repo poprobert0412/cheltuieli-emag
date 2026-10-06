@@ -5,6 +5,7 @@ reconstruite. Cu datele salvate, raportul se poate reface fără browser
 (`--din-cache`). Se salvează doar datele parsate, fără date personale.
 Un fișier editat de mână sau salvat de altă versiune a programului nu dă
 traceback: `load_run` ridică ValueError cu fișierul și poziția greșelii.
+Comenzile salvate înainte de câmpul `due_bani` se aduc la forma nouă la citire (`_upgrade_saved_block`).
 """
 
 import json
@@ -69,6 +70,33 @@ def _load_records(path: Path, build: Callable[[dict], T], noun: str) -> list[T]:
     return records
 
 
+def _upgrade_saved_block(block: dict) -> dict:
+    """Un bloc salvat de o versiune fără `due_bani`, adus la forma nouă (blocurile noi rămân neschimbate).
+
+    Versiunile vechi puneau „Total de plata” (suma de plătit a unui bloc fără „Total platit”) în `other_bani`, ca pe o
+    taxă. Îl recunoaștem doar după identitatea exactă: ultima sumă din `other_bani` = produse + reduceri + transport +
+    servicii + celelalte taxe. Atunci trece în `due_bani`; altfel blocul rămâne cum era.
+    """
+    other = block.get("other_bani")
+    if "due_bani" in block or block.get("paid_bani") is not None or not isinstance(other, list) or not other:
+        return block
+    try:
+        rest = (sum(item["line_total_bani"] for item in block["items"]) + sum(block["vouchers_bani"])
+                + (block.get("shipping_bani") or 0) + sum(block["services_bani"]) + sum(other[:-1]))
+    except (KeyError, TypeError):
+        return block  # formă neașteptată: o semnalează order_from_dict, cu fișierul și poziția
+    if other[-1] != rest:
+        return block
+    return {**block, "other_bani": other[:-1], "due_bani": other[-1]}
+
+
+def _order_from_saved(data: dict) -> Order:
+    """Comanda din comenzi.json, cu blocurile salvate de versiunile vechi aduse la forma nouă."""
+    if isinstance(data, dict) and isinstance(data.get("blocks"), list):
+        data = {**data, "blocks": [_upgrade_saved_block(b) if isinstance(b, dict) else b for b in data["blocks"]]}
+    return order_from_dict(data)
+
+
 def load_run(folder: Path) -> tuple[list[Order], list[ReturnRequest]]:
     """Încarcă comenzile și retururile dintr-un folder de rulare salvat.
 
@@ -79,6 +107,6 @@ def load_run(folder: Path) -> tuple[list[Order], list[ReturnRequest]]:
     for path in (orders_path, returns_path):
         if not path.exists():
             raise FileNotFoundError(f"lipsește {path} (nu e un folder de rulare complet)")
-    orders = _load_records(orders_path, order_from_dict, "comanda")
+    orders = _load_records(orders_path, _order_from_saved, "comanda")
     returns = _load_records(returns_path, return_from_dict, "returul")
     return orders, returns

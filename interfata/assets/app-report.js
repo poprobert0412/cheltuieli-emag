@@ -70,7 +70,7 @@
       const kind = target.kind || (known && known.kind) || 'real';
       setHeading(target, kind, (known && known.created_at) || target.created);
       if (!root.EmagDashboard) {
-        setStatus('Nu am putut încărca componenta raportului (dashboard.js). Reîncarcă pagina cu porneste.bat.', true);
+        setStatus('Nu am putut încărca componenta raportului (dashboard.js). Pornește din nou aplicația cu lansatorul (porneste.bat, porneste.command sau ./porneste.sh).', true);
         return;
       }
       mounted = root.EmagDashboard.mount(App.dom.byId('report-root'), data, { demo: kind === 'demo', headingLevel: HEADING_LEVEL });

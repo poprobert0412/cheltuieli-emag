@@ -5,7 +5,9 @@ Primește: nimic. Dă înapoi: (planuri de comenzi, planuri de retur) INVENTATE,
 prag, marketplace, necategorizate, retur finalizat / anulat / fără rezultat. Pentru „Prețuri la același produs”: același
 model în două culori (se unește), capacități diferite (NU se unesc), un produs mai ieftin și unul mai scump la ultima
 cumpărare. Pentru avertismente: bloc fără „Total plătit”, trei antete ≠ suma blocurilor (una cu bloc anulat), retur
-finalizat fără sumă. Nu calculează cifre agregate (le face spend_analysis) și nu pune numere de comandă.
+finalizat fără sumă. Pentru „plătit efectiv”: televizor cu voucher și cost de livrare, retur cu voucher dintr-un bloc
+livrat, retur restituit cu puțin sub partea plătită (diferență la restituiri).
+Nu calculează cifre agregate (le face spend_analysis) și nu pune numere de comandă.
 """
 
 from emag_spend import block_status
@@ -25,6 +27,9 @@ TV_43 = "Televizor LED Smart Norvik 43NV5200, 108 cm, Full HD, Clasa F"
 TV_55 = "Televizor LED Smart Kelmor 55KM7100, 139 cm, Ultra HD 4K, Clasa G"
 TV_OLED = "Televizor OLED Smart Tavora 55TV9500, 139 cm, Ultra HD 4K, Clasa G"
 TV_QLED = "Televizor QLED Smart Altrion 50AQ6600, 126 cm, Ultra HD 4K, Clasa F"
+TV_50 = "Televizor LED Smart Kelmor 50KM6300, 126 cm, Ultra HD 4K, Clasa F"
+SSD = "SSD Brenta 1TB, NVMe, M.2"
+BOXA = "Boxă portabilă Lumio Go, Bluetooth 5.3, 20W"
 SUPORT_TV = "Suport TV perete Brenta B400, 32 - 65 inch, fix"
 WHISKY_12 = "Whisky Glenmora Highland 12 ani, 0.7L, 40%"
 WHISKY_25 = "Whisky Strathvale Single Malt 25 ani, 0.7L, 43%"
@@ -146,9 +151,11 @@ def scripted_plans() -> tuple[list[OrderPlan], list[ReturnPlan]]:
     ghete = add(_order("2022-09-14T17:00", BlockPlan(  # marcat „Livrare anulată”, dar returnat
         ZORILOR, _C, [_line(GHETE, 389)], storno=True)))
     returns.append(ReturnPlan(ghete, (GHETE,), mode="Emitere voucher"))
-    add(_order("2022-11-25T06:58", _emag(
+    laptop = add(_order("2022-11-25T06:58", _emag(
         _line("Laptop Altrion Book 15, 15.6 inch, Full HD, 8 nuclee, 16GB RAM, 512GB SSD", 3499),
-        _line("Stick USB Brenta 128GB, USB 3.2", 49), _line("SSD Brenta 1TB, NVMe, M.2", 349), voucher_bani=15000)))
+        _line("Stick USB Brenta 128GB, USB 3.2", 49), _line(SSD, 349), voucher_bani=15000, storno=True)))
+    # SSD-ul returnat: eMAG a restituit cu 3,50 Lei sub partea lui plătită (a împărțit voucherul altfel) -> „Diferențe la restituiri”
+    returns.append(ReturnPlan(laptop, (SSD,), refund_delta_bani=-350))
 
     # --- 2023 ---
     add(_order("2023-02-12T20:20", _emag(_line("Bicicletă pliabilă Kelmor Urban 20 inch", 1299))))
@@ -192,6 +199,10 @@ def scripted_plans() -> tuple[list[OrderPlan], list[ReturnPlan]]:
         _line("Uscător de păr Kelmor 2200W, ionizare", 179), _line("Apă de parfum Aurelia 100 ml", 289), storno=True)))
     returns.append(ReturnPlan(dryer, ("Uscător de păr Kelmor 2200W, ionizare",), refund_shown=False))  # finalizat, fără sumă afișată
     add(_order("2025-10-20T16:10", _emag(_line("Stick USB Brenta 256GB, USB 3.2", 74, 90))))
+    # televizor cu voucher și cost de livrare: plătit = preț − voucher + livrare; livrarea rămâne la „Transport și taxe”
+    add(_order("2025-04-12T18:40", _emag(_line(TV_50, 2899), voucher_bani=50000, shipping_bani=3999)))
+    speaker = add(_order("2025-11-15T11:20", _emag(_line(BOXA, 199), storno=True)))
+    returns.append(ReturnPlan(speaker, (BOXA,), mode="Emitere voucher"))  # retur cu voucher dintr-un bloc livrat: nu se scade
     add(_order("2025-12-12T15:45", _emag(_line("Card cadou Brenta Shop 200 Lei", 200, 0))))
 
     # --- 2026: în curs, fără rezultat, asigurare ---

@@ -2,8 +2,8 @@
 
 Primește: interfata/index.html, assets/site*.js, fișierele CSV ale programului (coloanele lor), porneste.bat, ruleaza.py și config/. Verifică: fiecare funcție e
 descrisă în „Cum se calculează” și în întrebările frecvente, coloanele CSV scrise în pagină sunt EXACT cele din cod, formularea despre rețea e cea exactă, apelul
-„Deschide aplicația” explică pasul (dublu-click pe porneste.bat) fără un link direct spre aplicatie.html (din file:// n-ar merge) și afirmațiile despre lansator
-se potrivesc cu fișierul. NU deschide browserul.
+„Deschide aplicația” explică pasul (dublu-click pe porneste.bat) fără un link direct spre aplicatie.html (din file:// n-ar merge), afirmațiile despre lansator
+se potrivesc cu fișierul, iar actualizările (cererea spre GitHub, întrebarea frecventă, comenzile) sunt spuse peste tot unde trebuie. NU deschide browserul.
 """
 
 import html
@@ -14,7 +14,8 @@ from emag_spend import csv_export, price_history_csv, settings
 ROOT = settings.PROJECT_ROOT
 INDEX = (ROOT / "interfata" / "index.html").read_text(encoding="utf-8")
 PAGE_TEXT = html.unescape(re.sub(r"<[^>]+>", "", INDEX))
-FAQ_IDS_ADDED = ("faq-aplicatie", "faq-server-local", "faq-link-comanda", "faq-avertismente-grupe", "faq-preturi", "faq-fara-retururi")
+FAQ_IDS_ADDED = ("faq-aplicatie", "faq-server-local", "faq-link-comanda", "faq-avertismente-grupe", "faq-preturi", "faq-fara-retururi",
+                 "faq-actualizari")
 # Formularea exactă a deciziei din brief: ce iese din calculator când apeși pe un link spre o comandă.
 NETWORK_SENTENCE = "Linkurile către comenzi se deschid pe emag.ro doar când apeși pe ele, în browserul tău"
 
@@ -128,7 +129,11 @@ def test_the_viewer_section_points_to_the_app_for_the_easy_way():
 
 def test_what_the_page_says_about_the_launcher_matches_the_launcher():
     launcher = (ROOT / "porneste.bat").read_text(encoding="utf-8")
-    assert "instaleaza.bat" in launcher and "ruleaza.py --aplicatie" in launcher
+    # Fără argumente pornește aplicația: direct (ruleaza.py --aplicatie) sau printr-o variabilă cu implicitul --aplicatie (din 5 oct. 2026,
+    # rândul lui Python e unul singur, ultimul din fișier, ca o actualizare să nu-l poată strica).
+    default = re.search(r'set "([A-Z_]+)=--aplicatie"', launcher)
+    starts_app = "ruleaza.py --aplicatie" in launcher or (default is not None and f"ruleaza.py %{default.group(1)}%" in launcher)
+    assert "instaleaza.bat" in launcher and starts_app
     assert "apelează instaleaza.bat" in PAGE_TEXT and "ruleaza.py --aplicatie" in PAGE_TEXT
     script = (ROOT / "ruleaza.py").read_text(encoding="utf-8")
     assert '"--aplicatie"' in script and '"--fara-browser"' in script
@@ -141,6 +146,52 @@ def test_the_server_description_keeps_to_the_decided_protections():
                    "Serverul nu trimite nimic spre exterior"):
         assert needed in faq, needed
     assert ".profil_browser/" in faq and "iesiri/" in faq and "logs/" in faq
+    # Excepția spusă deschis (5 oct. 2026): procesul aplicației întreabă GitHub de versiunea nouă, dezactivabil.
+    for needed in ("api.github.com", "EMAG_UPDATE_CHECK=0", "Actualizează acum"):
+        assert needed in faq, needed
+
+
+# ---------- actualizările (decis 5 oct. 2026) ----------
+
+def test_every_list_of_what_leaves_the_computer_names_the_update_check():
+    """Oriunde pagina spune ce pleacă de pe calculator, pomenește și cererea spre GitHub (altfel ar promite „doar emag.ro”)."""
+    description = next(m.group(1) for m in re.finditer(r'<meta name="description" content="([^"]*)"', INDEX))
+    places = {
+        "descrierea paginii": description,
+        "Ce pleacă din calculator": text_of(re.search(r'<div class="never">.*?</div>', INDEX, re.S).group(0)),
+        "Funcționează pentru toți": text_of(section("pentru-cine")),
+        "Datele mele pleacă undeva?": text_of(re.search(r'<details id="faq-date">.*?</details>', INDEX, re.S).group(0)),
+        "Ce face aplicația locală?": text_of(re.search(r'<details id="faq-aplicatie">.*?</details>', INDEX, re.S).group(0)),
+    }
+    for place, text in places.items():
+        assert "versiune nouă" in text or "GitHub" in text, place
+    never = places["Ce pleacă din calculator"]
+    assert "api.github.com" in never and "adresa ta IP" in never and "EMAG_UPDATE_CHECK=0" in never and "SHA-256" in never
+
+
+def test_the_update_faq_says_what_happens_what_stays_and_the_limit():
+    """„Cum primesc versiunile noi?”: cererea, ce vede GitHub, butonul, amprenta, ce rămâne, revenirea, alternativele și limita onestă."""
+    faq = text_of(re.search(r'<details id="faq-actualizari">.*?</details>', INDEX, re.S).group(0))
+    for needed in ("Cum primesc versiunile noi?", "api.github.com", "adresa ta IP", "versiunea programului", "Actualizează acum",
+                   "Nimic nu se instalează fără să apeși tu", "cât rulează o analiză", "SHA-256", "pune la loc versiunea veche",
+                   "următoarea pornire", "--actualizeaza", "git pull", "EMAG_UPDATE_CHECK=0", "nu de un cont GitHub compromis"):
+        assert needed in faq, needed
+    assert 'href="#faq-actualizari"' in INDEX, "lista „Ce pleacă din calculator” trimite la întrebare"
+
+
+def test_the_update_commands_have_their_own_copyable_lines():
+    """Comenzile --versiune și --actualizeaza au rândul lor în „Comenzi”, cu buton de copiere, iar programul chiar le are."""
+    commands = section("comenzi")
+    for code_id, flag in (("c-versiune", "--versiune"), ("c-actualizeaza", "--actualizeaza")):
+        line = re.search(rf'<code id="{code_id}" translate="no">(.*?)</code>', commands, re.S)
+        assert line and flag in text_of(line.group(1)), code_id
+        assert f'data-copy-from="#{code_id}"' in commands, code_id
+    script = (ROOT / "ruleaza.py").read_text(encoding="utf-8")
+    assert '"--versiune"' in script and '"--actualizeaza"' in script
+    text = text_of(commands)
+    assert re.search(r"„Cheltuieli eMAG [0-9]+\.[0-9]+\.[0-9]+”", text), "exemplul ieșirii lui --versiune"
+    assert 'PROGRAM_NAME = "Cheltuieli eMAG"' in script and 'print(f"{PROGRAM_NAME} {VERSION}")' in script, "ieșirea reală a lui --versiune"
+    assert "DA" in text and "git pull" in text and "revine singur la versiunea veche" in text
 
 
 def test_the_simulator_does_not_pluralize_a_count_it_prints_next_to_a_number():

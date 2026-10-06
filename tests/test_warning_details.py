@@ -45,6 +45,8 @@ ROUND_TRIP_CASES = [
     (wm.format_header_mismatches(25), wm.KIND_HEADER_MISMATCH, (), None, None, 25, False),
     (wm.format_highlight_category_missing("Categorie Inventata"), wm.KIND_OTHER, (), None, None, None, False),
     (wm.format_funnel_not_closing(10000, 9900), wm.KIND_OTHER, (), None, None, None, True),
+    (wm.format_paid_not_closing(wm.PAID_CHECK_CHAIN, 10000, 9900), wm.KIND_OTHER, (), None, None, None, True),
+    (wm.format_paid_not_closing(wm.PAID_CHECK_BLOCKS, 10000, 10100), wm.KIND_OTHER, (), None, None, None, True),
     (wm.format_uncategorized(4), wm.KIND_OTHER, (), None, None, None, False),
     ("retur 3001: nu are produse listate", wm.KIND_OTHER, (), None, "3001", None, True),
 ]
@@ -71,6 +73,18 @@ def test_original_wordings_that_other_files_and_tests_look_for_are_kept():
     assert "evidențiată" in wm.format_highlight_category_missing("X") and "«X»" in wm.format_highlight_category_missing("X")
     assert "status necunoscut" in wm.format_unknown_status("100", "F", "x")
     assert "lipsește 'Total platit'" in wm.format_missing_paid_total("100", "F")
+
+
+def test_the_uncategorized_warning_sends_the_user_to_the_personal_rules_that_updates_keep():
+    """N15 (decis 6 oct. 2026): regulile noi merg în config/categorii.personal.json (păstrat la actualizare), nu în categorii.json
+    (fișier al programului, înlocuit); la fel și textul „Ce faci” al grupei din config/avertismente.json."""
+    from emag_spend import settings
+    personal = f"config/{settings.PERSONAL_CATEGORY_RULES_FILE_NAME}"
+    public = f"config/{settings.CATEGORY_RULES_FILE.name}"
+    assert settings.CATEGORY_RULES_FILE.parent.name == "config"
+    assert wm.format_uncategorized(2) == f"2 produse necategorizate (adaugă reguli în {personal})"
+    other = TEXTS["grupe"][wm.KIND_OTHER]["what_to_do"]
+    assert personal in other and f"în {public}" not in other, other
 
 
 @pytest.mark.parametrize("text", [

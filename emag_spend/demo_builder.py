@@ -2,14 +2,19 @@
 
 Primește: planuri (`OrderPlan`, `ReturnPlan`) scrise de demo_scenario.py și demo_data.py: doar produse, prețuri, stări, vouchere.
 Dă înapoi: (comenzi, retururi) cu totaluri care se leagă (produse = „Total produse”; plătit = componente; antet = suma blocurilor),
-numere de comandă și de retur unice, în ordine cronologică. Planul poate cere „defecte” realiste, ca raportul să arate
-avertismentele: bloc fără „Total plătit” (`paid_shown=False`), antet ≠ suma blocurilor (`header_extra_bani`), retur
-finalizat fără sumă (`refund_shown=False`). Nu alege produse și nu folosește numere aleatoare: tot ce e variabil vine din plan.
+numere de comandă și de retur unice, în ordine cronologică. Suma restituită la un retur e, ca la eMAG, partea plătită a
+produselor (prețul minus partea lor din voucher, block_payment.py), plus o diferență cerută de plan (`refund_delta_bani`).
+Planul poate cere „defecte” realiste, ca raportul să arate avertismentele: bloc fără „Total plătit” (`paid_shown=False`),
+antet ≠ suma blocurilor (`header_extra_bani`), retur finalizat fără sumă (`refund_shown=False`). Nu alege produse și nu
+folosește numere aleatoare: tot ce e variabil vine din plan.
 """
 
 from dataclasses import dataclass
 
+from collections import Counter
+
 from emag_spend import block_status, warning_messages
+from emag_spend.block_payment import block_payment
 from emag_spend.models import Item, Order, ReturnRequest, SellerBlock
 
 EMAG_SELLER = "eMAG"
@@ -68,6 +73,7 @@ class BlockPlan:
     storno: bool = False  # există "Factura storno"
     status_text: str | None = None  # None = textul implicit al stării
     paid_shown: bool = True  # False = pagina nu arată "Total platit" pentru acest bloc (apare avertisment)
+    shipping_bani: int | None = None  # costul de livrare; None = regula implicită (gratuit de la SHIPPING_FREE_FROM_BANI)
 
 
 @dataclass
@@ -88,7 +94,8 @@ class ReturnPlan:
     """Un retur dorit pentru produsele `names` (câte o intrare pe bucată) dintr-o comandă.
 
     `outcome`: "completed" (restituit), "cancelled" (cerere anulată) sau "pending"
-    (cerere fără rezultat). La "completed" suma restituită e prețul produselor.
+    (cerere fără rezultat). La "completed" suma restituită e partea plătită a produselor (după voucher),
+    plus `refund_delta_bani` (negativ = eMAG a restituit mai puțin, de ex. a împărțit voucherul altfel).
     """
 
     order: OrderPlan
@@ -96,6 +103,7 @@ class ReturnPlan:
     outcome: str = "completed"
     mode: str = "Vreau banii inapoi"
     refund_shown: bool = True  # False = returul e finalizat, dar pagina nu arată suma restituită
+    refund_delta_bani: int = 0
 
 
 def _placed_text(placed_at: str) -> str:
@@ -121,7 +129,7 @@ def _make_block(plan: BlockPlan) -> SellerBlock:
         shipping, services, other, paid = 0, [], [], 0
     else:
         vouchers = [-plan.voucher_bani] if plan.voucher_bani else []
-        shipping = _shipping_bani(plan, products)
+        shipping = plan.shipping_bani if plan.shipping_bani is not None else _shipping_bani(plan, products)
         services, other = list(plan.services_bani), list(plan.other_bani)
         paid = products + sum(vouchers) + shipping + sum(services) + sum(other)
     default_text = _PICKUP_STATUS_TEXT if plan.pickup and plan.status == block_status.DELIVERED \
@@ -156,15 +164,20 @@ def _make_order(order_id: str, plan: OrderPlan) -> Order:
     return Order(order_id, _placed_text(plan.placed_at), plan.placed_at, header, blocks, warnings)
 
 
-def _refund_bani(plan: ReturnPlan) -> int:
-    """Suma restituită = prețul pe bucată al fiecărui produs returnat. Ridică ValueError dacă produsul nu e în comandă."""
+def _refund_bani(order: Order, plan: ReturnPlan) -> int:
+    """Suma restituită = partea plătită (după voucher) a bucăților returnate + `refund_delta_bani`.
+
+    Ridică ValueError dacă un produs din retur nu e în comandă.
+    """
     total = 0
-    for name in plan.names:
-        unit = next((line.unit_bani for block in plan.order.blocks for line in block.lines if line.name == name), None)
-        if unit is None:
+    for name, count in Counter(plan.names).items():
+        found = next(((block, index) for block in order.blocks for index, item in enumerate(block.items) if item.name == name), None)
+        if found is None:
             raise ValueError(f"produsul {name!r} din retur nu e în comanda din {plan.order.placed_at}")
-        total += unit
-    return total
+        block, index = found
+        item, paid = block.items[index], block_payment(block).line_paid_bani[index]
+        total += (paid * count * 2 + item.qty) // (item.qty * 2)  # aceeași rotunjire ca LineOutcome._share_of
+    return total + plan.refund_delta_bani
 
 
 def build_orders_and_returns(
@@ -176,12 +189,14 @@ def build_orders_and_returns(
     """
     chronological = sorted(range(len(plans)), key=lambda i: (plans[i].placed_at, i))
     order_ids: dict[int, str] = {}
+    built: dict[int, Order] = {}
     orders: list[Order] = []
     for position, index in enumerate(chronological):
         plan = plans[index]
         order_id = str(_ORDER_ID_START + position * 937 + (position * position * 7) % 311)
         order_ids[id(plan)] = order_id
-        orders.append(_make_order(order_id, plan))
+        built[id(plan)] = _make_order(order_id, plan)
+        orders.append(built[id(plan)])
 
     returns: list[ReturnRequest] = []
     ordered_returns = sorted(range(len(return_plans)), key=lambda i: (return_plans[i].order.placed_at, i))
@@ -197,7 +212,7 @@ def build_orders_and_returns(
             order_ids=[order_ids[id(plan.order)]],
             product_names=list(plan.names),
             steps=list(RETURN_STEPS[plan.outcome]),
-            refund_bani=_refund_bani(plan) if completed and plan.refund_shown else None,
+            refund_bani=_refund_bani(built[id(plan.order)], plan) if completed and plan.refund_shown else None,
             refund_mode=plan.mode,
             completed=completed,
             cancelled=plan.outcome == "cancelled",

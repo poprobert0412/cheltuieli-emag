@@ -1,0 +1,10 @@
+{
+  "_ajutor": "Cum tratează programul modul de restituire al unui retur finalizat (textul de la „Modalitate restituire” din pagina returului, comparat fără diacritice și fără majuscule). „bani_inapoi”: banii s-au întors pe card sau în cont, deci se scad din cât ai cheltuit. „credit_emag”: valoarea a devenit voucher sau sold eMAG și NU se scade: voucherul se folosește apoi ca reducere într-o comandă următoare și scade deja „Total plătit” al acelei comenzi, deci scăzut și aici ar fi scăzut de două ori. „Generare sold” e trecut la credit (decis de autor pe 5 oct. 2026): soldul se folosește ca reducere la o comandă următoare („Reducere conform voucher/card cadou”); dacă la tine apare ca metodă de plată, mută-l la „bani_inapoi”. Un mod care nu e în nicio listă se tratează ca „bani_inapoi” și apare un avertisment. După ce editezi, refaci raportul cu: python ruleaza.py --din-cache iesiri\\<rulare>",
+  "bani_inapoi": [
+    "Vreau banii inapoi"
+  ],
+  "credit_emag": [
+    "Emitere voucher",
+    "Generare sold"
+  ]
+}

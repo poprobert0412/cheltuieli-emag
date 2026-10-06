@@ -6,9 +6,12 @@ rem Șterge sesiunea eMAG salvată pe acest calculator, adică folderul .profil_
 rem Programul cere o confirmare înainte să șteargă; după ștergere trebuie să rulezi din nou login.bat.
 rem Ștergerea o face programul Python, nu acest script, care nu are voie să șteargă nimic.
 rem Fără goto și fără etichete: batch-urile cu diacritice UTF-8 pot da erori la etichete.
+rem Rândul care pornește Python e ULTIMUL din fișier și are pe el tot ce urmează (decis 5 oct. 2026, D13): o actualizare
+rem poate înlocui acest fișier cât rulează Python, iar cmd l-ar citi mai departe de la o poziție greșită. Mesajul final și
+rem pauza sunt în instalare\dupa_rulare.bat; «call exit /b» păstrează codul exact. Detalii în porneste.bat.
 title Șterge sesiunea eMAG
-set "PYTHONUTF8=1"
-set "PYTHONDONTWRITEBYTECODE=1"
+rem Variabilele comune (unde stau Python-ul, pachetele și browserul descărcate): instalare\mediu.bat.
+call ".\instalare\mediu.bat"
 
 if not exist "ruleaza.py" (
   echo.
@@ -21,7 +24,7 @@ if not exist "ruleaza.py" (
 )
 if not exist ".venv\Scripts\python.exe" (
   echo.
-  echo Programul nu este instalat încă. Rulează mai întâi instaleaza.bat, apoi încearcă din nou.
+  echo Programul nu este pregătit încă. Dă mai întâi dublu-clic pe porneste.bat: pregătește singur tot ce lipsește.
   echo.
   pause
   exit /b 1
@@ -31,13 +34,4 @@ echo.
 echo Urmează să ștergi sesiunea ta eMAG salvată pe acest calculator.
 echo După aceea va trebui să te loghezi din nou, cu login.bat. Comenzile și rapoartele din iesiri nu se șterg.
 echo.
-".venv\Scripts\python.exe" ruleaza.py --sterge-sesiunea
-set "COD=%ERRORLEVEL%"
-
-echo.
-if not "%COD%"=="0" (
-  echo Sesiunea nu a fost ștearsă sau comanda s-a oprit cu o eroare. Citește mesajul de mai sus.
-)
-echo.
-pause
-exit /b %COD%
+".venv\Scripts\python.exe" ruleaza.py --sterge-sesiunea & call ".\instalare\dupa_rulare.bat" sterge_sesiunea %%ERRORLEVEL%% & call exit /b %%ERRORLEVEL%%

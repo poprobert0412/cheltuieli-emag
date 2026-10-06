@@ -32,6 +32,9 @@ MAX_TABS_LIST_TO_CAPTION = ANNOTATION_COUNT - 1
 MIN_MARKER_CONTRAST = 7
 # CLS (layout shift) tolerat la încărcare fără #hash: bonul își rezervă înălțimea, deci aproape zero.
 MAX_LOAD_CLS = 0.02
+# Lățimi uzuale la care rândul total al bonului și al lanțului din simulator rămâne pe un singur rând. La 320 px și la
+# 860–900 px (unde coloana bonului e cea mai îngustă) rândul bonului se rupe oricum, deci lățimile acelea nu sunt aici.
+ONE_LINE_TOTAL_WIDTHS = (390, 768, 1024, 1280, 1920)
 SETTLE_MS = 400
 # Cod inline scurt (fără spații, ≤ 28 de caractere) care se rupe pe mai multe rânduri sau iese din cutia părintelui.
 INLINE_CODE_PROBE_JS = """(() => { const found = {split: [], outside: []};
@@ -150,6 +153,16 @@ def test_page_fits_with_wcag_text_spacing(open_site, width):
     assert not stray, stray
 
 
+@pytest.mark.parametrize("width", ONE_LINE_TOTAL_WIDTHS)
+def test_totals_of_the_ticket_and_of_the_simulator_stay_on_one_line(open_site, width):
+    """Eticheta și suma totalului stau pe același rând la lățimile uzuale (o etichetă prea lungă rupe rândul, iar pe bon îl face să sară la numărare)."""
+    page, _ = open_site(width=width, height=900)
+    rows = page.evaluate("""() => ['.ticket__total', '.chain__row--total'].map((sel) => { const row = document.querySelector(sel); if (!row) return [sel, null];
+        const label = row.querySelector('[class$="__label"]').getBoundingClientRect(); const value = row.querySelector('[class$="__val"]').getBoundingClientRect();
+        return [sel, value.top < label.bottom && label.top < value.bottom]; })""")
+    assert rows == [[".ticket__total", True], [".chain__row--total", True]], rows
+
+
 @pytest.mark.parametrize("size", [(1280, 800), (1024, 768), (390, 844), (320, 700)])
 def test_hero_does_not_jump_while_it_fills_in(browser, size):
     """CLS la încărcare (fără #hash) rămâne aproape de zero: piesa din hero își rezervă înălțimea."""
@@ -166,7 +179,7 @@ def test_hero_does_not_jump_while_it_fills_in(browser, size):
 
 
 def test_hero_numbers_add_up_in_every_animation_frame(browser):
-    """În timpul numărării: comandat − anulat − returnat − în curs = păstrat, la fiecare cadru, nu doar la final."""
+    """În timpul numărării: comandat − anulat − returnat − în curs + transport și taxe = plătit efectiv, la fiecare cadru, nu doar la final."""
     context = browser.new_context(viewport={"width": 1280, "height": 900}, reduced_motion="no-preference")
     try:
         page = context.new_page()
@@ -185,12 +198,12 @@ def test_hero_numbers_add_up_in_every_animation_frame(browser):
 
     checked = 0
     for frame in frames:
-        values = [bani(frame.get(key)) for key in ("ordered_bani", "cancelled_bani", "returned_bani", "pending_bani", "kept_bani")]
+        values = [bani(frame.get(key)) for key in ("ordered_bani", "cancelled_bani", "returned_bani", "pending_bani", "fees_bani", "spent_bani")]
         if None in values:
             continue
         checked += 1
-        ordered, cancelled, returned, pending, kept = values
-        assert ordered - cancelled - returned - pending - (bani(frame.get("unknown_bani")) or 0) == kept, frame
+        ordered, cancelled, returned, pending, fees, spent = values
+        assert ordered - cancelled - returned - pending - (bani(frame.get("unknown_bani")) or 0) + fees == spent, frame
     assert checked > 20
 
 
@@ -431,7 +444,7 @@ def test_problem_filter_announces_once_and_matches_real_messages(open_site):
         return page.evaluate("[...document.querySelectorAll('#problems-table tbody tr')].filter((r) => !r.hidden && !r.classList.contains('group') && !r.classList.contains('empty')).length")
 
     for query in ("1 retur cu cerere înregistrată dar fără rezultat: produsul lui rămâne numărat ca păstrat",
-                  "2 produse necategorizate (adaugă reguli în config/categorii.json)",
+                  "2 produse necategorizate (adaugă reguli în config/categorii.personal.json)",
                   "retur 12345: comanda 100000001 nu e în lista citită",
                   "suma produselor (22298) ≠ 'Total produse' (22000)",
                   "status necunoscut"):

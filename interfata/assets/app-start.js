@@ -3,6 +3,8 @@
  * Dă înapoi, ca window.App.start: init(). La succes anunță mașina de stări (beginRun), iar ecranul „în lucru” apare
  * imediat; la 409 (rulează deja una) arată progresul ei; la altă eroare scrie mesajul aplicației lângă buton.
  * Cât cererea e în zbor, butoanele rămân pe loc dar nu mai pornesc nimic (aria-disabled, nu disabled: focusul nu se pierde).
+ * La fel cât se instalează o versiune nouă (App.state `updateBusy`, pus de app-update.js; decis 5 oct. 2026, D18): butoanele
+ * sunt dezactivate, iar un clic doar spune de ce. Un 409 cu alt cod decât „rulează deja o analiză” arată mesajul aplicației.
  * Ce NU face: nu desenează progresul (app-run.js) și nu validează pragul (app-threshold.js).
  */
 (function (root) {
@@ -10,9 +12,12 @@
 
   const App = (root.App = root.App || {});
   const BUSY_LABEL = 'Pornesc…';
+  const RUN_IN_PROGRESS = 'run_in_progress'; // codul 409 pentru „rulează deja o analiză” (alte 409: actualizare în curs)
+  const UPDATE_BUSY_MESSAGE = 'Se instalează o versiune nouă a programului. Analiza poate porni după ce aplicația repornește.';
 
   let busy = false;
   let errorBox = null;
+  let buttons = [];
 
   /** Pune sau scoate starea „se pornește” pe un buton, păstrându-i textul de dinainte. */
   function setButtonBusy(button, on) {
@@ -29,6 +34,15 @@
     }
   }
 
+  /** Butoanele de pornire sunt dezactivate cât o cerere e în zbor sau cât se instalează o actualizare. */
+  function syncDisabled() {
+    const blocked = busy || App.state.get().updateBusy;
+    buttons.forEach(function (button) {
+      if (blocked) button.setAttribute('aria-disabled', 'true');
+      else button.removeAttribute('aria-disabled');
+    });
+  }
+
   function showError(message) {
     errorBox.className = 'field__hint start__error' + (message ? ' is-bad' : '');
     errorBox.textContent = message;
@@ -37,6 +51,10 @@
   /** Pornește o rulare în modul cerut ('real' sau 'demo'). */
   function start(mode, button) {
     if (busy) return;
+    if (App.state.get().updateBusy) {
+      App.dom.announce(UPDATE_BUSY_MESSAGE);
+      return;
+    }
     showError('');
     const threshold = App.threshold.read();
     if (!threshold.ok) return; // read() a arătat eroarea lângă câmp și a mutat focusul
@@ -49,7 +67,7 @@
       App.state.beginRun(reply.run_id, mode);
       App.poll.kick();
     }).catch(function (error) {
-      if (error && error.status === 409) {
+      if (error && error.status === 409 && error.code === RUN_IN_PROGRESS) {
         App.dom.announce('Rulează deja o analiză. Îți arăt progresul ei.');
         App.poll.kick();
         return;
@@ -63,6 +81,7 @@
     }).then(function () {
       busy = false;
       setButtonBusy(button, false);
+      syncDisabled();
     });
   }
 
@@ -73,11 +92,15 @@
     const demoButton = App.dom.byId('btn-demo');
     errorBox = App.dom.byId('start-error');
     if (!form || !startButton || !demoButton || !errorBox) return;
+    buttons = [startButton, demoButton];
     form.addEventListener('submit', function (event) {
       event.preventDefault();
       start('real', startButton);
     });
     demoButton.addEventListener('click', function () { start('demo', demoButton); });
+    App.state.subscribe(function (now, before) {
+      if (now.updateBusy !== before.updateBusy) syncDisabled();
+    });
   }
 
   App.start = { init: init };

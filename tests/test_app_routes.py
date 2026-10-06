@@ -370,7 +370,7 @@ def test_cancel_reports_whether_something_was_running(app, fake):
 def test_runs_list_reads_the_outputs_folder(app):
     """GET /api/runs -> lista rulărilor din iesiri/ în forma din contract."""
     runs = app.call("GET", "/api/runs").json()
-    assert runs == [{"id": RUN_ID, "created_at": "2026-10-05T09:00:00", "kind": "real", "orders": 12, "kept_bani": 345600, "has_report": True}]
+    assert runs == [{"id": RUN_ID, "created_at": "2026-10-05T09:00:00", "kind": "real", "orders": 12, "kept_bani": 345600, "spent_bani": None, "has_report": True}]
 
 
 def test_analysis_is_returned_as_json(app):

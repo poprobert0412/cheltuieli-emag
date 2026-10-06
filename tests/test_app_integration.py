@@ -79,7 +79,7 @@ def test_a_demo_run_goes_from_the_button_to_the_report_over_real_http(real_app, 
 
     (listed,) = real_app.call("GET", "/api/runs").json()
     assert listed["id"] == run_id and listed["kind"] == "demo" and listed["orders"] == len(orders) and listed["has_report"] is True
-    assert listed["kept_bani"] == body["funnel"]["kept_bani"]
+    assert listed["kept_bani"] == body["funnel"]["kept_bani"] and listed["spent_bani"] == body["paid"]["spent_bani"]
 
     report = real_app.call("GET", f"/api/runs/{run_id}/files/raport.html")
     assert report.status == 200 and b"<html" in report.body.lower() and report.headers["content-disposition"].startswith("attachment")
@@ -161,6 +161,7 @@ def _wait_for_output(capsys, collected: list[str], pattern: str) -> str:
 def test_aplicatie_with_fara_browser_prints_the_full_url_and_stops_cleanly(tmp_path, monkeypatch, capsys):
     """`--aplicatie --fara-browser`: nu deschide nimic, scrie URL-ul COMPLET (cu token) în consolă; adresa merge cu tokenul; /api/shutdown -> cod 0; jurnalul nu are tokenul."""
     monkeypatch.setenv("EMAG_APP_IDLE_MINUTES", "5")
+    monkeypatch.setenv("EMAG_UPDATE_CHECK", "0")  # aplicația reală: fără verificarea versiunii noi (niciun test nu iese pe internet)
     with isolated_program(monkeypatch, tmp_path) as layout:
         thread, result = _run_cli_in_a_thread(["--aplicatie", "--fara-browser"])
         collected: list[str] = []
@@ -193,6 +194,7 @@ def test_aplicatie_with_fara_browser_prints_the_full_url_and_stops_cleanly(tmp_p
 
 def test_aplicatie_opens_the_browser_with_the_token_but_prints_a_url_without_it(tmp_path, monkeypatch, capsys):
     """Fără --fara-browser: browserul primește adresa cu token, iar consola arată adresa FĂRĂ token (tokenul nu rămâne pe ecran)."""
+    monkeypatch.setenv("EMAG_UPDATE_CHECK", "0")  # aplicația reală: fără verificarea versiunii noi (niciun test nu iese pe internet)
     with isolated_program(monkeypatch, tmp_path) as layout:
         thread, result = _run_cli_in_a_thread(["--aplicatie"])
         collected: list[str] = []

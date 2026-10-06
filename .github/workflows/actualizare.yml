@@ -1,0 +1,129 @@
+# Testul actualizării (decis 5 oct. 2026, D17; 6 oct. 2026, N14), pe Windows, macOS și Linux. Ia ultima lansare publicată, îi
+# verifică amprenta și îi face copii „îmbătrânite” (VERSION = 0.0.1 și un fișier vechi, listat în manifest, care nu mai există
+# în versiunea nouă). Când există cel puțin două lansări publicate, ia și lansarea anterioară, NEîmbătrânită: așa se testează
+# actualizatorul unei versiuni deja instalate la utilizatori, nu doar codul nou care se actualizează pe el însuși. Fiecare
+# copie primește date de utilizator inventate și e pregătită cu lansatorul ei, apoi trece pe una dintre cele două căi:
+#  a) din terminal: ruleaza.py --actualizeaza --fara-confirmare → ultima versiune, fișierele programului identice cu lansarea,
+#     cele scoase din versiunea nouă șterse, datele identice; apoi lansatorul pornește versiunea nouă (reface pregătirea);
+#  b) din aplicație: lansatorul cu --aplicatie --fara-browser, POST /api/update/apply, repornirea făcută de lansator (a doua
+#     adresă „Aplicația rulează” în jurnal), /api/hello cu versiunea nouă, apoi oprirea, cu codul 0; aceleași verificări.
+# Rulează după fiecare lansare (îl cheamă lansare.yml: lansările făcute cu GITHUB_TOKEN nu pornesc alte workflow-uri), la
+# cerere și săptămânal. Programul vorbește doar cu GitHub, fără autentificare (D2), și doar pe 127.0.0.1; pașii care depind de
+# API-ul GitHub se reiau (REINCERCARI_API). Fără secrete: doar tokenul implicit, cu drept de citire (pentru gh). Uneltele
+# pașilor stau în .github/scripts/actualizare_ci.sh (testate local în tests/test_lansare.py); gh, curl și unzip sunt pe
+# mașinile GitHub. Pașii sunt bash (pe Windows, Git Bash); cmd doar pentru porneste.bat.
+name: Actualizare
+
+on:
+  workflow_call:
+    inputs:
+      eticheta:
+        description: "Eticheta care trebuie să fie ultima lansare (o trimite lansare.yml); goală = ultima lansare, oricare ar fi"
+        type: string
+        required: false
+        default: ""
+  workflow_dispatch:
+    inputs:
+      eticheta:
+        description: "Eticheta așteptată ca ultimă lansare (opțional)"
+        type: string
+        required: false
+        default: ""
+  schedule:
+    - cron: "37 4 * * 3"
+
+permissions:
+  contents: read
+
+jobs:
+  actualizare:
+    name: actualizare (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # Până la patru copii, fiecare cu pregătirea ei (uv, Python, pachete), plus reîncercările pașilor care depind de API.
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ASTEPTATA: ${{ inputs.eticheta }}
+      PYTHONUTF8: "1"
+      # Fără tampon: adresa aplicației apare în jurnal imediat, nu la oprire.
+      PYTHONUNBUFFERED: "1"
+      # De câte ori se încearcă un pas care depinde de API-ul GitHub și pauza de bază dintre încercări (1, 2, 3 × pauza):
+      # programul cere fără autentificare (D2), iar limita de 60 de cereri pe oră e pe IP, împărțită cu alte joburi.
+      REINCERCARI_API: "4"
+      PAUZA_API_SECUNDE: "60"
+    steps:
+      # Doar pentru uneltele din .github/scripts: programul testat vine din lansările publicate, nu din acest checkout.
+      - name: Descarcă uneltele testului
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: depozit
+          persist-credentials: false
+
+      - name: Ia ultima lansare și îi verifică amprenta
+        run: |
+          . ./depozit/.github/scripts/actualizare_ci.sh
+          ETICHETA=$(ultima_eticheta)
+          NUME="cheltuieli-emag-$ETICHETA"
+          descarca_lansarea "$ETICHETA" lansare
+          { echo "ETICHETA=$ETICHETA"; echo "VERSIUNE=${ETICHETA#v}"; echo "NUME=$NUME"; } >> "$GITHUB_ENV"
+
+      - name: Ia lansarea anterioară, dacă există
+        run: |
+          . ./depozit/.github/scripts/actualizare_ci.sh
+          ANTERIOARA=$(gh_reincercat release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName' | versiunea_anterioara "$VERSIUNE")
+          if [ -n "$ANTERIOARA" ]; then
+            descarca_lansarea "v$ANTERIOARA" anterioara
+            echo "Lansarea anterioară e v$ANTERIOARA: o actualizez și pe ea, neîmbătrânită, pe ambele căi."
+            { echo "COPII_A=copie-a anterioara-a"; echo "COPII_B=copie-b anterioara-b"; } >> "$GITHUB_ENV"
+          else
+            echo "Nu există o lansare publicată înaintea lui $ETICHETA: testez doar copiile îmbătrânite."
+            { echo "COPII_A=copie-a"; echo "COPII_B=copie-b"; } >> "$GITHUB_ENV"
+          fi
+          echo "ANTERIOARA=$ANTERIOARA" >> "$GITHUB_ENV"
+
+      - name: Pregătește copiile vechi, cu date de utilizator
+        run: |
+          . ./depozit/.github/scripts/actualizare_ci.sh
+          pregateste_referinta
+          # shellcheck disable=SC2086 # COPII_A și COPII_B sunt liste de nume fără spații, despărțite intenționat
+          for COPIE in $COPII_A $COPII_B; do pregateste_copia "$COPIE"; done
+
+      - name: Pregătește mediul cu lansatorul (prima pornire a versiunii vechi)
+        run: |
+          . ./depozit/.github/scripts/actualizare_ci.sh
+          # shellcheck disable=SC2086
+          for COPIE in $COPII_A $COPII_B; do pregateste_mediul "$COPIE"; done
+
+      - name: a) Actualizare din terminal
+        run: |
+          . ./depozit/.github/scripts/actualizare_ci.sh
+          # shellcheck disable=SC2086
+          for COPIE in $COPII_A; do actualizeaza_din_terminal "$COPIE"; done
+
+      - name: a) După actualizare, lansatorul reface pregătirea și pornește versiunea nouă
+        run: |
+          . ./depozit/.github/scripts/actualizare_ci.sh
+          # shellcheck disable=SC2086
+          for COPIE in $COPII_A; do porneste_versiunea_noua "$COPIE"; done
+
+      - name: b) Actualizare din aplicație, cu repornirea făcută de lansator
+        run: |
+          . ./depozit/.github/scripts/actualizare_ci.sh
+          # shellcheck disable=SC2086
+          for COPIE in $COPII_B; do actualizeaza_din_aplicatie "$COPIE"; done
+
+      - name: Jurnalele, dacă ceva a picat
+        if: failure()
+        run: |
+          for F in copie-*/*.log anterioara-*/*.log copie-*/*/logs/*.log anterioara-*/*/logs/*.log; do
+            [ -f "$F" ] || continue
+            echo "===== $F"
+            tail -n 200 "$F"
+          done

@@ -1,9 +1,9 @@
 """Rulează tot fluxul: colectare (sau cache) -> analiză -> fișiere de ieșire.
 
 Primește: opțiunile din linia de comandă (și, de la aplicația locală: un raportor de progres, un nume de folder ales dinainte, demo fără rescrierea lui demo-data.js).
-Dă înapoi: folderul rulării (`iesiri/<data>_<ora>[_demo]/`) cu comenzi.json, retururi.json, analiza.json, raport.html, produse.csv, istoric_preturi.csv, rezumat.txt și run_info.json (căi relative la proiect, fără numele contului de Windows).
+Dă înapoi: folderul rulării (`iesiri/<data>_<ora>[_demo]/`) cu comenzi.json, retururi.json, analiza.json, raport.html, produse.csv, istoric_preturi.csv, rezumat.txt și run_info.json (versiunea programului; căi relative la proiect, fără numele contului de Windows).
 Datele se scriu pe măsură ce sosesc: o rulare care pică la retururi lasă comenzile pe disc. Cu `demo=True` comenzile vin din datele inventate (demo_data.py), regulile personale de categorii se ignoră, iar la final se rescrie `interfata/assets/demo-data.js` (site_demo_writer.py), în afară de `update_site_demo_data=False`.
-Regulile de categorii, textele avertismentelor și culorile produselor se verifică ÎNAINTE de colectare: o greșeală oprește rularea în secunde, nu după ore."""
+Regulile de categorii, textele avertismentelor, culorile produselor și modurile de restituire se verifică ÎNAINTE de colectare: o greșeală oprește rularea în secunde, nu după ore."""
 
 import asyncio
 import logging
@@ -19,10 +19,12 @@ from emag_spend.emag_collector import collect_all
 from emag_spend.price_history_csv import write_price_history_csv
 from emag_spend.product_key import COLOR_WORDS_FILE, load_color_words
 from emag_spend.progress import NO_PROGRESS, PHASE_ANALYZING, Progress
+from emag_spend.refund_modes import REFUND_MODES_FILE, load_refund_modes
 from emag_spend.report_html import write_report
 from emag_spend.site_demo_writer import DEMO_META_KEY, write_demo_data_js
 from emag_spend.spend_analysis import analyze
 from emag_spend.summary_text import build_summary_text
+from emag_spend.version import VERSION
 from emag_spend.warning_details import WARNING_TEXTS_FILE, load_warning_texts
 
 logger = logging.getLogger(__name__)
@@ -94,6 +96,7 @@ def run(options: RunOptions, log_path: Path | None = None, progress: Progress = 
     classifier = _load_classifier(include_personal=not options.demo)  # înainte de colectare și de crearea folderului: o greșeală de reguli nu lasă nimic pe disc
     warning_texts = load_warning_texts(WARNING_TEXTS_FILE)  # la fel: un config/avertismente.json greșit oprește rularea înainte să înceapă
     color_words = load_color_words(COLOR_WORDS_FILE)  # idem pentru config/culori.json
+    refund_modes = load_refund_modes(REFUND_MODES_FILE)  # idem pentru config/restituiri.json
     run_dir = _new_run_dir(options.output_dir, options.demo, options.run_folder_name)
     logger.info("folder rulare: %s", run_dir)
     threshold_bani = round(options.threshold_lei * 100)
@@ -128,6 +131,7 @@ def run(options: RunOptions, log_path: Path | None = None, progress: Progress = 
         highlight_categories=settings.HIGHLIGHT_CATEGORIES,
         warning_texts=warning_texts,
         color_words=color_words,
+        refund_modes=refund_modes,
     )
     if options.demo:
         analysis.summary["meta"][DEMO_META_KEY] = True  # comenzi inventate: raportul nu face linkuri spre eMAG pentru ele
@@ -138,6 +142,7 @@ def run(options: RunOptions, log_path: Path | None = None, progress: Progress = 
     text = build_summary_text(analysis.summary)
     (run_dir / "rezumat.txt").write_text(text, encoding="utf-8")
     run_store.save_json(run_dir, "run_info.json", {
+        "program_version": VERSION,  # ce versiune a programului a făcut rularea (D19), ca o rulare veche să poată fi explicată
         "pornit": f"{started:%Y-%m-%d %H:%M:%S}",
         "terminat": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
         "prag_lei": options.threshold_lei,
@@ -150,6 +155,7 @@ def run(options: RunOptions, log_path: Path | None = None, progress: Progress = 
         "reguli_personale": classifier.personal_source,  # numele fișierului personal folosit, sau None (la --demo: niciodată)
         "textele_avertismentelor": _project_relative(WARNING_TEXTS_FILE),
         "culorile_produselor": _project_relative(COLOR_WORDS_FILE),
+        "modurile_de_restituire": _project_relative(REFUND_MODES_FILE),
         "jurnal": _project_relative(log_path) if log_path else None,
     })
     if options.demo and options.update_site_demo_data:

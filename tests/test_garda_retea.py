@@ -1,14 +1,18 @@
-"""Garda de rețea: nimic nu pleacă de pe calculatorul utilizatorului, în afară de citirea paginilor eMAG.
+"""Garda de rețea: nimic nu pleacă de pe calculatorul utilizatorului, în afară de citirea paginilor eMAG și de verificarea
+versiunii noi pe GitHub (decis 5 oct. 2026, D5: un singur client HTTPS, update_http.py, spre gazdele GitHub fixate aici).
 
 Primește: sursele programului (`emag_spend/**/*.py`, `ruleaza.py`) și interfața (`interfata/**`, `templates/**`).
-Verifică: (1) Python (AST): fără module de rețea sau de procese, Playwright doar unde trebuie, doar GET spre pagini
-construite din settings.BASE_URL; (2) orice adresă din surse Python are gazda emag.ro; (3) JS/HTML/CSS: fără
-cereri de rețea, resurse externe, formulare sau navigări automate (se caută tipare de COD, nu cuvinte);
-(4) la execuție: fluxurile --demo, --din-cache și --sterge-sesiunea rulează cu socket-urile blocate și notate.
-Fiecare detector e probat și pe un „cod-capcană” care trebuie să pice. Ce NU face: nu verifică ce primește eMAG.
+Verifică: (1) Python (AST): fără module de rețea sau de procese (urllib/ssl/http.client doar în update_http.py), Playwright doar
+unde trebuie, doar GET spre pagini construite din settings.BASE_URL; (2) orice adresă din surse Python are gazda emag.ro (excepție:
+șabloanele GitHub din update_check.py); (3) JS/HTML/CSS: fără cereri de rețea, resurse externe, formulare sau navigări automate; linkuri doar spre www.emag.ro și,
+DOAR în app-update.js, spre pagina lansărilor de pe github.com, verificată în cod înainte de link (excepția N17);
+(4) la execuție: fluxurile --demo, --din-cache și --sterge-sesiunea rulează cu socket-urile blocate și notate, iar verificarea
+versiunii (direct și din aplicația pornită) încearcă o singură conexiune, spre api.github.com:443.
+Fiecare detector e probat și pe un „cod-capcană” care trebuie să pice. Ce NU face: nu verifică ce primește eMAG sau GitHub.
 """
 
 import ast
+import os
 import re
 import socket
 from html.parser import HTMLParser
@@ -50,6 +54,17 @@ LOCAL_SERVER_MODULES = frozenset({"http.server", "socketserver", "socket"})
 # (http, 127.0.0.1, port numeric, /aplicatie.html) înainte de apel; de aceea acceptă `webbrowser.open(<variabilă>)`, nu doar `.as_uri()`.
 APP_URL_OPENER_FILE = "app_opener.py"
 WEBBROWSER_MODULE_FILES = frozenset({WEBBROWSER_MODULE_FILE, APP_URL_OPENER_FILE})
+# EXCEPȚIA actualizărilor (decis 5 oct. 2026, D5): singurul client HTTPS al programului e emag_spend/update_http.py (calea exactă, nu
+# orice fișier cu același nume). Doar el are voie să importe urllib.request, ssl și http.client, ca să citească lansările publicate pe
+# GitHub; gazdele lui sunt exact UPDATE_HOSTS (test_update_hosts_are_exactly_the_decided_ones), cu https, certificat verificat și
+# fiecare redirecționare verificată. Restul regulilor rămân și pentru el: fără socket, subprocess, create_connection, requests...
+UPDATE_CLIENT_FILE = "emag_spend/update_http.py"
+UPDATE_CLIENT_MODULES = frozenset({"urllib.request", "ssl", "http.client"})
+UPDATE_HOSTS = frozenset({"api.github.com", "github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"})
+# Adresele GitHub scrise în cod stau DOAR în update_check.py și doar ca șabloane care pornesc din depozitul din settings
+# ({repository} = settings.UPDATE_REPOSITORY): un depozit sau o gazdă scrisă direct în cod tot pică.
+UPDATE_URL_FILE = "emag_spend/update_check.py"
+UPDATE_URL_TEMPLATE_PREFIXES = ("https://api.github.com/repos/{repository}/", "https://github.com/{repository}/releases/")
 # Adresa la care are voie să asculte serverul local și portul cerut (0 = îl alege sistemul; un port fix ar fi o țintă cunoscută).
 LOOPBACK_ADDRESS = "127.0.0.1"
 FREE_PORT_VALUE = 0
@@ -139,6 +154,8 @@ def python_network_violations(tree: ast.Module, filename: str) -> list[str]:
                     hit = _module_hit(name)
                     if hit in LOCAL_SERVER_MODULES and base == LOCAL_SERVER_FILE:
                         continue  # excepția serverului local; leagă doar la 127.0.0.1 (local_binding_violations)
+                    if hit in UPDATE_CLIENT_MODULES and filename == UPDATE_CLIENT_FILE:
+                        continue  # excepția clientului HTTPS al actualizărilor (UPDATE_CLIENT_FILE)
                     if hit:
                         add(node, f"importă «{name}» ({FORBIDDEN_MODULES[hit]}): programul nu are voie să trimită nimic în afara calculatorului în afară de citirea paginilor eMAG prin Playwright")
                         break
@@ -170,6 +187,8 @@ def python_network_violations(tree: ast.Module, filename: str) -> list[str]:
             hit = _module_hit(dotted) if dotted.count(".") >= 1 else None
             if hit in LOCAL_SERVER_MODULES and base == LOCAL_SERVER_FILE:
                 hit = None  # excepția serverului local (opțiuni de socket, clase de server)
+            if hit in UPDATE_CLIENT_MODULES and filename == UPDATE_CLIENT_FILE:
+                hit = None  # excepția clientului HTTPS al actualizărilor (ssl.create_default_context, http.client.HTTPException)
             if hit and not isinstance(parents.get(node), ast.Attribute):
                 add(node, f"folosește «{dotted}» ({FORBIDDEN_MODULES[hit]}) fără import vizibil: accesul la rețea trebuie să fie ușor de văzut")
     for line, text, is_docstring in string_constants(tree):
@@ -181,14 +200,22 @@ def python_network_violations(tree: ast.Module, filename: str) -> list[str]:
     return problems
 
 
+def _is_update_url_template(filename: str, text: str, match: re.Match) -> bool:
+    """True doar în UPDATE_URL_FILE, pentru un literal care ÎNCEPE cu un șablon GitHub din UPDATE_URL_TEMPLATE_PREFIXES."""
+    return filename == UPDATE_URL_FILE and match.start() == 0 and text.startswith(UPDATE_URL_TEMPLATE_PREFIXES)
+
+
 def python_url_violations(tree: ast.Module, filename: str) -> list[str]:
-    """Adresele din literalele text (în afara docstring-urilor) a căror gazdă nu e eMAG sau care nu sunt https."""
+    """Adresele din literalele text (în afara docstring-urilor) a căror gazdă nu e eMAG sau care nu sunt https (excepția: șabloanele GitHub ale actualizărilor)."""
     problems = []
     for line, text, is_docstring in string_constants(tree):
         if is_docstring:
             continue  # documentația poate cita adrese; doar codul activ face cereri
         for match in URL_IN_TEXT.finditer(text):
             url = match.group(0)
+            if _is_update_url_template(filename, text, match):
+                continue  # excepția actualizărilor (UPDATE_URL_FILE): gazda și depozitul vin din șablon, nu din cod
+
             try:
                 parts = urlsplit(url)
                 host = (parts.hostname or "").lower()
@@ -276,6 +303,17 @@ def local_binding_violations(tree: ast.Module, filename: str) -> list[str]:
 
 # Gazda externă permisă: linkurile către comenzile din cont, ca <a href> deschis DOAR la clic-ul utilizatorului.
 ALLOWED_LINK_HOSTS = frozenset({"www.emag.ro"})
+# EXCEPȚIA paginii lansărilor (decis 6 oct. 2026, N17): a doua și ultima gazdă spre care interfața face un link e github.com, DOAR
+# în app-update.js: linkul „pagina lansărilor”, arătat când verificarea sau actualizarea a eșuat, ca omul să verifice singur; se
+# deschide doar la clicul lui, în filă nouă, cu rel="noopener noreferrer". De ce garda nu-l vede ca pe linkurile eMAG: adresa nu e
+# un literal, vine la rulare din GET /api/update (page_url, acceptat de update_check.py doar ca https://github.com/{depozit}/releases/...).
+# De aceea garda cere, chiar în acel fișier, verificarea făcută înainte de link (protocol https:, gazda EXACT RELEASES_LINK_HOST, fără
+# utilizator, parolă sau port, rel noopener + noreferrer; releases_link_problems) și refuză în orice alt fișier JS al interfeței o gazdă
+# GitHub scrisă ca text sau o verificare `.hostname` (external_host_problems): acolo un link spre altă gazdă n-ar avea excepția lui.
+RELEASES_LINK_FILE = "interfata/assets/app-update.js"
+RELEASES_LINK_HOST = "github.com"
+# Un literal care e EXACT numele unei gazde GitHub (github.com, api.github.com, *.githubusercontent.com, *.github.io), oricum ar fi scris.
+GITHUB_HOST_LITERAL = re.compile(r"(?i)(?:[a-z0-9-]+\.)*(?:github\.com|githubusercontent\.com|github\.io)")
 # Spații de nume XML: sunt identificatori (ex. la createElementNS), nu cereri de rețea.
 XML_NAMESPACE_URLS = frozenset({"http://www.w3.org/2000/svg", "http://www.w3.org/1999/xlink", "http://www.w3.org/1999/xhtml"})
 # Extensiile pe care le așteptăm în interfață; altceva (ex. .exe, .wasm, .php) cere o verificare manuală.
@@ -520,6 +558,41 @@ def app_api_client_problems(text: str, label: str) -> list[str]:
     return problems
 
 
+def releases_link_problems(text: str, label: str) -> list[str]:
+    """Regulile excepției N17 pentru app-update.js: gazda e o constantă egală EXACT cu RELEASES_LINK_HOST, iar adresa devine link doar
+    după `protocol === 'https:'`, `hostname === <constanta>` și fără username, password, port; linkul cere noopener și noreferrer."""
+    views = scan_js(text)
+    code = views.uncommented
+    problems = []
+    hosts = re.findall(r"""\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*['"]([^'"]*)['"]""", code)
+    named = [name for name, value in hosts if value == RELEASES_LINK_HOST]
+    if len(named) != 1 or any(GITHUB_HOST_LITERAL.fullmatch(value) and value != RELEASES_LINK_HOST for _, value in hosts):
+        problems.append(f"{label}: trebuie exact o constantă egală cu «{RELEASES_LINK_HOST}» și nicio altă gazdă GitHub: excepția e doar pentru pagina lansărilor")
+    if not re.search(r"""\.protocol\s*===\s*['"]https:['"]""", code):
+        problems.append(f"{label}: linkul spre pagina lansărilor nu cere `protocol === 'https:'` înainte să existe")
+    if not named or not re.search(r"\.hostname\s*===\s*" + re.escape(named[0]) + r"\b", code):
+        problems.append(f"{label}: linkul spre pagina lansărilor nu cere `hostname === <gazda {RELEASES_LINK_HOST}>` (exact, nu endsWith/includes)")
+    for part in ("username", "password", "port"):
+        if not re.search(r"!\s*[A-Za-z_$][\w$]*\." + part + r"\b", code):
+            problems.append(f"{label}: linkul spre pagina lansărilor nu refuză o adresă cu {part} (`!adresa.{part}`)")
+    for word in ("noopener", "noreferrer"):
+        if not re.search(r"""\brel\s*:\s*['"][^'"]*\b""" + word + r"\b", code):
+            problems.append(f"{label}: linkul spre pagina lansărilor nu are rel cu «{word}»")
+    return problems
+
+
+def external_host_problems(text: str, label: str) -> list[str]:
+    """În orice fișier JS în afară de RELEASES_LINK_FILE: nicio gazdă GitHub scrisă ca text și nicio verificare `.hostname` (un link spre
+    o gazdă străină, construit la rulare, pe care regulile de adrese nu-l văd)."""
+    views = scan_js(text)
+    problems = [f"{label}:{line}: gazda «{literal}» scrisă în cod: doar {RELEASES_LINK_FILE} are voie să facă un link spre {RELEASES_LINK_HOST}"
+                for line, literal in views.strings if GITHUB_HOST_LITERAL.fullmatch(literal.strip())]
+    for match in re.finditer(r"\.hostname\b", views.code):
+        line = views.code.count("\n", 0, match.start()) + 1
+        problems.append(f"{label}:{line}: `.hostname` (verificarea gazdei unui link construit la rulare): doar {RELEASES_LINK_FILE} are excepția asta")
+    return problems
+
+
 def interface_violations(path: Path) -> list[str]:
     """Încălcările unui fișier din interfata/ sau templates/, după extensie (JS, CSS, HTML/SVG)."""
     label = relative(path)
@@ -530,9 +603,12 @@ def interface_violations(path: Path) -> list[str]:
         return []
     text = path.read_text(encoding="utf-8")
     if suffix == ".js" and label == APP_API_CLIENT_FILE:
-        return js_violations(text, label, allowed=APP_API_CLIENT_ALLOWED_RULES) + app_api_client_problems(text, label) + emag_link_hardening_problems(text, label)
+        return (js_violations(text, label, allowed=APP_API_CLIENT_ALLOWED_RULES) + app_api_client_problems(text, label)
+                + emag_link_hardening_problems(text, label) + external_host_problems(text, label))
+    if suffix == ".js" and label == RELEASES_LINK_FILE:
+        return js_violations(text, label) + emag_link_hardening_problems(text, label) + releases_link_problems(text, label)
     if suffix == ".js":
-        return js_violations(text, label) + emag_link_hardening_problems(text, label)
+        return js_violations(text, label) + emag_link_hardening_problems(text, label) + external_host_problems(text, label)
     if suffix == ".css":
         return css_violations(text, label)
     return html_violations(text, label)
@@ -737,18 +813,22 @@ def blocked_network(monkeypatch):
     """
     attempts: list[str] = []
 
-    def refuse(name):
-        """Fabrică o funcție care notează încercarea de rețea și ridică OSError."""
+    def refuse(name, *, is_method: bool):
+        """Fabrică o funcție care notează încercarea de rețea (cu adresa cerută) și ridică OSError."""
         def blocked(*args, **kwargs):
-            """Înlocuiește funcția de rețea: notează încercarea și refuză."""
-            attempts.append(f"{name}{args[1:2] if args else ''}")
+            """Înlocuiește funcția de rețea: notează încercarea și refuză.
+
+            Adresa e primul argument al funcțiilor (`create_connection(adresă, ...)`) și al doilea al metodelor (`connect(self, adresă)`).
+            """
+            address = args[1:2] if is_method else args[:1]
+            attempts.append(f"{name}{address}")
             raise OSError(f"rețea blocată de test ({name})")
         return blocked
 
     for name in BLOCKED_SOCKET_FUNCTIONS:
-        monkeypatch.setattr(socket, name, refuse(f"socket.{name}"))
+        monkeypatch.setattr(socket, name, refuse(f"socket.{name}", is_method=False))
     for name in BLOCKED_SOCKET_METHODS:
-        monkeypatch.setattr(socket.socket, name, refuse(f"socket.socket.{name}"))
+        monkeypatch.setattr(socket.socket, name, refuse(f"socket.socket.{name}", is_method=True))
     return attempts
 
 
@@ -773,7 +853,8 @@ def test_the_network_block_really_blocks_and_records(blocked_network):
         socket.socket().connect(("192.0.2.1", 80))
     with pytest.raises(OSError, match="rețea blocată"):
         socket.getaddrinfo("exemplu.invalid", 80)
-    assert len(blocked_network) == 3
+    assert blocked_network == ["socket.create_connection(('exemplu.invalid', 80),)", "socket.socket.connect(('192.0.2.1', 80),)",
+                               "socket.getaddrinfo('exemplu.invalid',)"], "fiecare încercare trebuie notată cu adresa cerută"
 
 
 @pytest.mark.parametrize("flow", FLOWS)
@@ -881,13 +962,19 @@ def test_the_two_opener_files_exist_and_still_need_their_exceptions():
 
 # ---------- la execuție: serverul local ascultă doar pe 127.0.0.1 și nu face nicio cerere spre exterior ----------
 
+# Evenimentele de audit care arată o legare, o conexiune, o interogare de nume, o cerere HTTP sau un proces nou.
+SERVER_AUDITED_EVENTS = ("socket.bind", "socket.connect", "socket.getaddrinfo", "socket.gethostbyname", "socket.gethostbyaddr", "socket.gethostbyname_ex",
+                         "socket.sendto", "socket.getnameinfo", "urllib.Request", "http.client.*", "subprocess.Popen")
+
 def test_the_running_local_server_binds_only_to_loopback_port_zero_and_makes_no_outgoing_network_call(tmp_path, monkeypatch, blocked_network):
-    """Serverul REAL, pornit sub observație: toate legările de socket atribuite programului sunt (127.0.0.1, 0), iar conexiuni ieșite sau interogări de nume nu apar deloc."""
+    """Serverul REAL, pornit sub observație: toate legările de socket atribuite programului sunt (127.0.0.1, 0), iar conexiuni ieșite sau interogări de nume nu apar deloc.
+
+    Verificarea versiunii noi e oprită (EMAG_UPDATE_CHECK=0): singura cerere ieșită permisă e a ei, dovedită separat mai jos.
+    """
     from emag_spend.app_server import AppServer
 
-    audited = ("socket.bind", "socket.connect", "socket.getaddrinfo", "socket.gethostbyname", "socket.gethostbyaddr", "socket.gethostbyname_ex", "socket.sendto",
-               "socket.getnameinfo", "urllib.Request", "http.client.*", "subprocess.Popen")
-    with AuditRecorder(audited) as audit:
+    monkeypatch.setenv("EMAG_UPDATE_CHECK", "0")
+    with AuditRecorder(SERVER_AUDITED_EVENTS) as audit:
         server = AppServer(outputs_dir=tmp_path / "iesiri", profile_dir=tmp_path / "profil", interface_dir=tmp_path / "interfata")
         server.close()
     binds = [event for event in audit.events if event.name == "socket.bind"]
@@ -896,6 +983,180 @@ def test_the_running_local_server_binds_only_to_loopback_port_zero_and_makes_no_
     others = [event for event in audit.events if event.name != "socket.bind"]
     assert not others, "serverul local a făcut conexiuni sau interogări de nume: " + "; ".join(f"{e.name} la {e.where}" for e in others)
     assert not blocked_network, f"serverul a încercat să folosească rețeaua blocată de test: {blocked_network}"
+
+
+# ---------- la execuție: verificarea versiunii noi încearcă o singură conexiune, spre api.github.com:443 ----------
+
+# Singura încercare de rețea permisă verificării (D2), așa cum o notează fixture-ul blocked_network.
+GITHUB_API_ATTEMPT = "socket.create_connection(('api.github.com', 443),)"
+GITHUB_API_HOST, HTTPS_PORT = "api.github.com", 443
+
+
+def _not_the_update_check(events) -> list[str]:
+    """Evenimentele de rețea ale programului care nu sunt: legarea locală (127.0.0.1, 0), cererea spre API-ul GitHub sau conexiunea la api.github.com:443."""
+    unexpected = []
+    for event in events:
+        if event.name == "socket.bind" and event.args[1:2] == ((LOOPBACK_ADDRESS, FREE_PORT_VALUE),):
+            continue
+        if event.name == "http.client.connect" and tuple(event.args[1:3]) == (GITHUB_API_HOST, HTTPS_PORT):
+            continue
+        # urllib.Request: (adresă, corp, antete, metodă); doar GET fără corp spre API-ul lansărilor
+        if event.name == "urllib.Request" and str(event.args[0]).startswith(f"https://{GITHUB_API_HOST}/repos/") and event.args[1] is None and event.args[3] == "GET":
+            continue
+        unexpected.append(f"{event.name} {event.args[1:3] if event.name != 'urllib.Request' else event.args[:1]} la {event.where}")
+    return unexpected
+
+
+def test_the_update_check_tries_only_api_github_com_443(monkeypatch, blocked_network):
+    """Verificarea REALĂ (update_check + update_http, fără nimic înlocuit în program), cu rețeaua blocată: o singură încercare,
+    spre api.github.com:443, o singură cerere GET, iar rezultatul e „eroare” cu mesajul „fără internet”, fără excepție."""
+    from emag_spend import update_check, update_http
+
+    monkeypatch.delenv("EMAG_UPDATE_CHECK", raising=False)
+    with AuditRecorder(SERVER_AUDITED_EVENTS) as audit:
+        result = update_check.check_for_update()
+    assert blocked_network == [GITHUB_API_ATTEMPT], f"verificarea a încercat altceva decât o conexiune la api.github.com:443: {blocked_network}"
+    assert (result.status, result.message) == ("eroare", update_http.MESSAGE_NO_INTERNET)
+    assert [e.name for e in audit.events] == ["urllib.Request", "http.client.connect"], (
+        f"trebuia exact o cerere și o conexiune, atribuite programului: {[(e.name, e.where) for e in audit.events]} (hook-ul nu prinde nimic?)")
+    assert not _not_the_update_check(audit.events)
+
+
+def test_the_running_application_checks_for_updates_only_at_api_github_com_443(tmp_path, monkeypatch, blocked_network):
+    """Aplicația REALĂ pornită (serve) cu verificarea implicită: singura conexiune încercată e spre api.github.com:443; serverul
+    ascultă doar pe (127.0.0.1, 0); starea verificării ajunge „eroare” (rețea blocată), iar aplicația merge mai departe."""
+    from emag_spend.app_server import AppServer
+    from tests.app_support import RunningApp, wait_for
+
+    monkeypatch.delenv("EMAG_UPDATE_CHECK", raising=False)
+    with AuditRecorder(SERVER_AUDITED_EVENTS) as audit:
+        app = AppServer(outputs_dir=tmp_path / "iesiri", profile_dir=tmp_path / "profil", interface_dir=tmp_path / "interfata", idle_seconds=3600)
+        running = RunningApp(app)
+        try:
+            wait_for(lambda: app.update_job.snapshot()["check"]["status"] == "eroare", "sfârșitul verificării versiunii, cu rețeaua blocată")
+        finally:
+            running.stop()
+    assert running.stopped, "serverul nu s-a oprit"
+    assert blocked_network == [GITHUB_API_ATTEMPT], f"aplicația a încercat altceva decât o conexiune la api.github.com:443: {blocked_network}"
+    assert any(e.name == "http.client.connect" for e in audit.events), "auditul n-a văzut conexiunea verificării: testul n-ar dovedi nimic"
+    assert not _not_the_update_check(audit.events), "evenimente de rețea în afara verificării: " + "; ".join(_not_the_update_check(audit.events))
+
+
+def test_the_running_application_with_the_check_off_makes_no_outgoing_call(tmp_path, monkeypatch, blocked_network):
+    """Aceeași aplicație cu EMAG_UPDATE_CHECK=0: verificarea ajunge „dezactivat” fără nicio încercare de rețea."""
+    from emag_spend import update_check
+    from emag_spend.app_server import AppServer
+    from tests.app_support import RunningApp, wait_for
+
+    monkeypatch.setenv("EMAG_UPDATE_CHECK", "0")
+    with AuditRecorder(SERVER_AUDITED_EVENTS) as audit:
+        app = AppServer(outputs_dir=tmp_path / "iesiri", profile_dir=tmp_path / "profil", interface_dir=tmp_path / "interfata", idle_seconds=3600)
+        running = RunningApp(app)
+        try:
+            wait_for(lambda: app.update_job.snapshot()["check"]["message"] == update_check.MESSAGE_DISABLED, "răspunsul „dezactivat” al verificării")
+        finally:
+            running.stop()
+    assert not blocked_network, f"cu verificarea oprită aplicația a încercat totuși rețeaua: {blocked_network}"
+    assert [e.name for e in audit.events] == ["socket.bind"], f"cu verificarea oprită singurul eveniment de rețea e legarea locală: {[(e.name, e.where) for e in audit.events]}"
+
+
+def test_a_test_that_forgets_the_switch_still_never_checks_online(tmp_path, blocked_network):
+    """Plasa de siguranță din tests/conftest.py (decis 6 oct. 2026, N16): un test care pornește aplicația REALĂ fără job fals și fără
+    să atingă EMAG_UPDATE_CHECK primește totuși „0”, deci verificarea ajunge „dezactivat” fără nicio încercare de rețea."""
+    from emag_spend import update_check
+    from emag_spend.app_server import AppServer
+    from tests.app_support import RunningApp, wait_for
+
+    switch = os.environ.get("EMAG_UPDATE_CHECK")  # doar valoarea ei: un eșec nu afișează tot mediul procesului
+    assert switch == settings.UPDATE_CHECK_DISABLED_VALUE, "tests/conftest.py nu a oprit verificarea automată"
+    app = AppServer(outputs_dir=tmp_path / "iesiri", profile_dir=tmp_path / "profil", interface_dir=tmp_path / "interfata", idle_seconds=3600)
+    running = RunningApp(app)
+    try:
+        wait_for(lambda: app.update_job.snapshot()["check"]["message"] == update_check.MESSAGE_DISABLED, "răspunsul „dezactivat” al verificării")
+    finally:
+        running.stop()
+    assert not blocked_network, f"aplicația pornită fără comutator a încercat rețeaua: {blocked_network}"
+
+
+# ---------- excepția clientului HTTPS al actualizărilor: îngustă, fixată și încă necesară ----------
+
+def test_update_hosts_are_exactly_the_decided_ones():
+    """D5: gazdele clientului sunt EXACT cele patru decise; o gazdă nouă în update_http.ALLOWED_HOSTS (sau una scoasă) pică aici."""
+    from emag_spend import update_http
+
+    assert update_http.ALLOWED_HOSTS == UPDATE_HOSTS == frozenset(
+        {"api.github.com", "github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"})
+    template_hosts = {urlsplit(prefix).hostname for prefix in UPDATE_URL_TEMPLATE_PREFIXES}
+    assert template_hosts <= UPDATE_HOSTS, f"șabloanele de adrese folosesc gazde nepermise: {template_hosts - UPDATE_HOSTS}"
+
+
+@pytest.mark.parametrize("source", ["import urllib.request", "from urllib.request import Request", "import ssl", "from ssl import create_default_context",
+                                    "import http.client", "from http.client import HTTPException", "import urllib.request as u\nu.urlopen('x')"])
+def test_the_update_client_modules_are_allowed_only_in_update_http(source):
+    """urllib.request, ssl și http.client trec doar în emag_spend/update_http.py (calea exactă) și sunt prinse în ORICE alt fișier."""
+    assert _py_in(source, UPDATE_CLIENT_FILE) == [], f"excepția nu funcționează în update_http.py pentru: {source}"
+    for other in ("emag_spend/update_check.py", "emag_spend/update_download.py", "emag_spend/app_server.py", "ruleaza.py",
+                  "emag_spend/capcana.py", "emag_spend/alt/update_http.py", "update_http.py"):
+        assert _py_in(source, other), f"«{source}» a trecut în {other}: doar {UPDATE_CLIENT_FILE} e clientul HTTPS"
+
+
+@pytest.mark.parametrize("source, expected", [
+    ("import socket", "socket"), ("import subprocess", "subprocess"), ("import requests", "requests"), ("import http.server", "http.server"),
+    ("import smtplib", "smtplib"), ("import socketserver", "socketserver"), ("import webbrowser", "webbrowser"),
+    ("import asyncio\nasync def f():\n    await asyncio.open_connection('x', 1)", "open_connection"),
+    ("def f(s):\n    s.create_connection(('x', 1))", "create_connection"), ("def f(s):\n    s.getaddrinfo('x', 1)", "getaddrinfo"),
+    ("import os\nos.system('x')", "os.system"), ("eval('1')", "eval"),
+])
+def test_the_update_client_gets_nothing_beyond_its_three_modules(source, expected):
+    """Excepția e îngustă: în update_http.py rămân interzise socket, subprocess, alte clienți, conexiunile directe și execuția de cod."""
+    problems = " | ".join(_py_in(source, UPDATE_CLIENT_FILE))
+    assert expected in problems, f"nu a fost prins «{expected}» în update_http.py:\n{source}\n(rezultat: {problems or 'nimic'})"
+
+
+def test_the_update_client_exception_is_still_needed():
+    """Excepția există doar cât timp update_http.py există și chiar importă fiecare dintre cele trei module (altfel se scoate din listă)."""
+    source = PROGRAM_DIR.parent / UPDATE_CLIENT_FILE
+    assert source.is_file(), f"excepția pentru {UPDATE_CLIENT_FILE}: fișierul nu mai există; scoate excepția"
+    tree = parse_source(source)
+    imported = {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
+    imported |= {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module and not node.level}
+    unused = sorted(module for module in UPDATE_CLIENT_MODULES if not any(_module_hit(name) == module for name in imported))
+    assert not unused, f"{UPDATE_CLIENT_FILE} nu mai importă {unused}: scoate-le din UPDATE_CLIENT_MODULES"
+    importers = [relative(path) for path in program_sources() if relative(path) != UPDATE_CLIENT_FILE
+                 for node in ast.walk(parse_source(path)) if isinstance(node, (ast.Import, ast.ImportFrom)) and not getattr(node, "level", 0)
+                 for name in ([a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""])
+                 if _module_hit(name) in UPDATE_CLIENT_MODULES]
+    assert not importers, f"alte fișiere importă modulele clientului HTTPS: {importers}; doar {UPDATE_CLIENT_FILE} are voie"
+
+
+@pytest.mark.parametrize("text, filename, hit", [
+    ("U = 'https://api.github.com/repos/{repository}/releases/latest'", UPDATE_URL_FILE, False),
+    ("U = 'https://github.com/{repository}/releases/download/{tag}/'", UPDATE_URL_FILE, False),
+    ("U = 'https://api.github.com/repos/{repository}/releases/latest'", "emag_spend/app_server.py", True),
+    ("U = 'https://api.github.com/repos/{repository}/releases/latest'", UPDATE_CLIENT_FILE, True),
+    ("U = 'https://github.com/{repository}/releases/'", "emag_spend/update_download.py", True),
+    ("U = 'https://api.github.com/repos/altcineva/proiect/releases/latest'", UPDATE_URL_FILE, True),
+    ("U = 'https://github.com/altcineva/proiect/releases/'", UPDATE_URL_FILE, True),
+    ("U = 'https://objects.githubusercontent.com/x'", UPDATE_URL_FILE, True),
+    ("U = 'https://exemplu.invalid/repos/{repository}/'", UPDATE_URL_FILE, True),
+    ("U = 'http://github.com/{repository}/releases/'", UPDATE_URL_FILE, True),
+    ("U = 'vezi https://github.com/{repository}/releases/'", UPDATE_URL_FILE, True),
+    ("U = 'https://github.com/{repository}/releases/ https://exemplu.invalid/'", UPDATE_URL_FILE, True),
+    ("U = 'https://www.emag.ro/history'", UPDATE_URL_FILE, False),
+])
+def test_github_urls_are_allowed_only_as_repository_templates_in_update_check(text, filename, hit):
+    """Adrese GitHub doar în update_check.py și doar ca șabloane din depozitul din settings; alt fișier, alt depozit, altă gazdă,
+    http sau o adresă în mijlocul unui text pică."""
+    assert bool(python_url_violations(ast.parse(text), filename)) is hit, f"{filename}: {text}"
+
+
+def test_the_update_url_exception_is_still_needed():
+    """Excepția de adrese există doar cât timp update_check.py chiar folosește fiecare șablon (altfel se scoate)."""
+    source = PROGRAM_DIR.parent / UPDATE_URL_FILE
+    assert source.is_file(), f"excepția pentru {UPDATE_URL_FILE}: fișierul nu mai există; scoate excepția"
+    literals = [text for _, text, is_docstring in string_constants(parse_source(source)) if not is_docstring]
+    unused = [prefix for prefix in UPDATE_URL_TEMPLATE_PREFIXES if not any(text.startswith(prefix) for text in literals)]
+    assert not unused, f"{UPDATE_URL_FILE} nu mai folosește șabloanele {unused}: scoate-le din UPDATE_URL_TEMPLATE_PREFIXES"
 
 
 # ---------- excepția clientului API al paginii aplicației ----------
@@ -958,3 +1219,76 @@ def test_the_api_client_exception_is_still_needed():
     if not path.is_file():
         pytest.skip(f"{APP_API_CLIENT_FILE} nu există încă (îl scrie agentul paginii aplicației); excepția rămâne neverificată")
     assert re.search(r"\bfetch\s*\(", scan_js(path.read_text(encoding="utf-8")).code), f"{APP_API_CLIENT_FILE} nu mai cheamă fetch: scoate excepția din garda de rețea"
+
+
+# ---------- excepția paginii lansărilor: github.com, doar în app-update.js (decis 6 oct. 2026, N17) ----------
+
+def _releases_file_text() -> str:
+    """Textul real al lui app-update.js (fișierul cu singurul link construit spre github.com)."""
+    return (PROGRAM_DIR.parent / RELEASES_LINK_FILE).read_text(encoding="utf-8")
+
+
+def test_the_releases_link_exception_is_justified_and_still_needed():
+    """Excepția există doar cât timp app-update.js chiar construiește un link (href) spre gazda RELEASES_LINK_HOST, verificată în cod."""
+    path = PROGRAM_DIR.parent / RELEASES_LINK_FILE
+    assert path.is_file(), f"{RELEASES_LINK_FILE} nu mai există: scoate excepția pentru {RELEASES_LINK_HOST} din garda de rețea"
+    views = scan_js(path.read_text(encoding="utf-8"))
+    assert any(literal == RELEASES_LINK_HOST for _, literal in views.strings), f"{RELEASES_LINK_FILE} nu mai numește {RELEASES_LINK_HOST}: scoate excepția"
+    assert re.search(r"\bhref\s*:", views.code), f"{RELEASES_LINK_FILE} nu mai face niciun link: scoate excepția"
+    assert re.search(r"\.hostname\b", views.code), f"{RELEASES_LINK_FILE} nu mai verifică gazda linkului: excepția nu mai are pe ce sta"
+
+
+def test_the_releases_link_is_checked_before_it_becomes_a_link():
+    """În app-update.js, adresa paginii lansărilor devine link doar după verificarea completă (https, gazda exactă, fără utilizator/parolă/port)."""
+    assert releases_link_problems(_releases_file_text(), RELEASES_LINK_FILE) == []
+
+
+@pytest.mark.parametrize("old, new, expected", [
+    ("parsed.protocol === 'https:' && ", "", "https:"),
+    ("parsed.hostname === RELEASES_HOST && ", "", "hostname"),
+    ("parsed.hostname === RELEASES_HOST", "parsed.hostname.endsWith(RELEASES_HOST)", "hostname"),
+    (" && !parsed.username", "", "username"),
+    (" && !parsed.password", "", "password"),
+    (" && !parsed.port", "", "port"),
+    ("rel: 'noopener noreferrer'", "rel: 'noopener'", "noreferrer"),
+    ("rel: 'noopener noreferrer'", "rel: 'noreferrer'", "noopener"),
+    ("const RELEASES_HOST = 'github.com';", "const RELEASES_HOST = 'gist.github.com';", RELEASES_LINK_HOST),
+])
+def test_the_releases_link_detector_catches_a_weakened_check(old, new, expected):
+    """Capcană: app-update.js real, cu câte o verificare scoasă sau slăbită (protocol, gazdă, utilizator, parolă, port, rel, altă gazdă): garda pică."""
+    text = _releases_file_text()
+    assert text.count(old) == 1, f"fragmentul «{old}» nu mai apare exact o dată în {RELEASES_LINK_FILE}: actualizează capcana"
+    problems = " | ".join(releases_link_problems(text.replace(old, new), RELEASES_LINK_FILE))
+    assert expected in problems, f"slăbirea «{old}» → «{new}» n-a fost prinsă (rezultat: {problems or 'nimic'})"
+
+
+def test_no_other_interface_file_names_a_github_host_or_checks_a_link_host():
+    """Gazda github.com (și celelalte gazde GitHub) și verificarea `.hostname` a unui link apar doar în app-update.js."""
+    for path in interface_files(".js"):
+        label = relative(path)
+        if label != RELEASES_LINK_FILE:
+            assert external_host_problems(path.read_text(encoding="utf-8"), label) == [], label
+
+
+@pytest.mark.parametrize("source", [
+    "const HOST = 'github.com';", "var h = 'api.github.com';", "var h = 'objects.githubusercontent.com';", "var h = 'GitHub.com';",
+    "if (u.hostname === h) { a.href = u.href; }", "return parsed.hostname == x;",
+])
+def test_external_host_detector_catches_trap_code(source):
+    """Capcană: în orice alt fișier JS, o gazdă GitHub scrisă ca text sau o verificare `.hostname` (link spre altă gazdă, construit la rulare) pică."""
+    assert external_host_problems(source, "interfata/assets/app-alt.js"), source
+
+
+def test_every_interface_script_goes_through_the_external_host_check(tmp_path):
+    """Legătura cu testul pe fișierele reale: interface_violations aplică external_host_problems oricărui JS în afară de app-update.js."""
+    script = tmp_path / "alt.js"
+    script.write_text("const HOST = 'github.com';\n", encoding="utf-8")
+    assert any("github.com" in problem for problem in interface_violations(script)), "un JS nou cu gazda github.com a trecut de gardă"
+
+
+def test_external_host_detector_allows_ordinary_names_and_text():
+    """Fals pozitiv: nume de fișiere, chei cu puncte, texte care pomenesc GitHub și adresele eMAG nu sunt gazde de link."""
+    clean = ("var f = 'analiza.json'; var k = 'paid.by'; var t = 'Versiunile noi vin de pe GitHub.';"
+             " var u = 'https://www.emag.ro/history/shoppingdetails/'; // github.com într-un comentariu nu contează")
+    assert external_host_problems(clean, "interfata/assets/app-alt.js") == []
+

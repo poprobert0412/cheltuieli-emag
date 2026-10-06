@@ -1,8 +1,9 @@
 /* app-state.js — mașina de stări a ecranului: din ce știe pagina, alege UN singur ecran.
  * Primește: starea aplicației (din /api/state), motivul de închidere (aplicația nu răspunde, a fost oprită, lipsește cheia),
  * rularea pornită din pagină și rularea veche deschisă din listă. Dă înapoi, ca window.App.state: get() (o copie a stării cu
- * câmpul `screen`), subscribe(fn), și acțiunile care schimbă starea (setServer, setClosed, beginRun, dismiss, openRun...).
- * Ecranele: loading, ready, working, done, error, cancelled, closed-needs-app, closed-stopped, closed-user, closed-nokey.
+ * câmpul `screen`), subscribe(fn), și acțiunile care schimbă starea (setServer, setClosed, beginRun, dismiss, openRun, setUpdateBusy...).
+ * Ecranele: loading, ready, working, done, error, cancelled, closed-needs-app, closed-stopped, closed-user, closed-nokey, closed-updated.
+ * `updateBusy` (pus de app-update.js) = se instalează o versiune nouă: „Pornește analiza” nu pornește nimic cât e adevărat.
  * Ce NU face: nu atinge DOM-ul și nu face cereri; ecranele și cererile sunt treaba celorlalte fișiere app-*.js.
  * `computeScreen` e funcție pură, expusă ca să poată fi verificată direct în teste.
  */
@@ -27,7 +28,7 @@
     return {
       server: null,           // ultimul răspuns de la /api/state
       version: null,          // versiunea aplicației (din /api/hello)
-      closed: null,           // null sau 'needs-app' | 'stopped' | 'user' | 'nokey'
+      closed: null,           // null sau 'needs-app' | 'stopped' | 'user' | 'nokey' | 'updated'
       connection: 'ok',       // 'ok' | 'retrying' (aplicația nu răspunde, mai încercăm)
       viewRun: null,          // rularea veche deschisă din listă: {id, kind, created_at}
       dismissedKey: null,     // starea terminală pe care omul a închis-o deja (ca să nu revină la următoarea interogare)
@@ -35,6 +36,7 @@
       pendingSince: 0,
       runMode: null,          // 'real' | 'demo' pentru rularea pornită din această pagină
       runModeRunId: null,     // numărul rulării pentru care e valabil runMode
+      updateBusy: false,      // se descarcă sau se instalează o versiune nouă (app-update.js): analiza nu pornește
     };
   }
 
@@ -94,7 +96,7 @@
     change(function (m) { m.connection = kind; });
   }
 
-  /** Aplicația nu mai poate fi folosită: motivul e 'needs-app', 'stopped', 'user' sau 'nokey'. */
+  /** Aplicația nu mai poate fi folosită: motivul e 'needs-app', 'stopped', 'user', 'nokey' sau 'updated' (repornește după actualizare). */
   function setClosed(reason) {
     change(function (m) { m.closed = reason; });
   }
@@ -106,6 +108,12 @@
 
   function setVersion(version) {
     change(function (m) { m.version = version; });
+  }
+
+  /** Actualizarea lucrează (true) sau nu (false); anunță abonații doar la schimbare. */
+  function setUpdateBusy(busy) {
+    if (model.updateBusy === !!busy) return;
+    change(function (m) { m.updateBusy = !!busy; });
   }
 
   /** O rulare a fost acceptată de aplicație: arătăm „în lucru” imediat, fără să așteptăm următoarea interogare. */
@@ -144,6 +152,7 @@
     setClosed: setClosed,
     clearClosed: clearClosed,
     setVersion: setVersion,
+    setUpdateBusy: setUpdateBusy,
     beginRun: beginRun,
     dismiss: dismiss,
     openRun: openRun,

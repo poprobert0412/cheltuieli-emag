@@ -1,8 +1,9 @@
 /* app-history.js — lista „Rulări anterioare” de pe ecranul de start (din GET /api/runs, adică folderul iesiri/).
- * Primește: lista de rulări de la aplicație [{id, created_at, kind, orders, kept_bani, has_report}], cele mai noi întâi.
+ * Primește: lista de rulări de la aplicație [{id, created_at, kind, orders, kept_bani, has_report}, opțional spent_bani], cele mai noi întâi.
  * Dă înapoi, ca window.App.history: init(), load() (Promise cu lista), lookup(id) (Promise cu rularea sau null).
- * Fiecare rând: data, „Demo” la cele cu date inventate, numărul de comenzi, cât ai păstrat și butonul „Deschide”
- * (doar dacă există raport). Lista se reîncarcă de fiecare dată când ecranul de start reapare (o rulare nouă a adăugat un rând).
+ * Fiecare rând: data, „Demo” la cele cu date inventate, numărul de comenzi, cât ai plătit efectiv (`spent_bani`, din analizele
+ * noi) sau, la rulările vechi, cât ai păstrat la preț de listă (`kept_bani`), și butonul „Deschide” (doar dacă există raport).
+ * Lista se reîncarcă de fiecare dată când ecranul de start reapare (o rulare nouă a adăugat un rând).
  * Ce NU face: nu citește fișiere de pe disc (doar aplicația o face) și nu desenează raportul (app-report.js).
  */
 (function (root) {
@@ -30,7 +31,8 @@
     const when = App.format.dateTime(run.created_at);
     const meta = [];
     if (typeof run.orders === 'number') meta.push(App.format.counted(run.orders, ORDER_FORMS));
-    if (typeof run.kept_bani === 'number') meta.push('păstrat: ' + App.format.lei(run.kept_bani));
+    if (typeof run.spent_bani === 'number') meta.push('plătit: ' + App.format.lei(run.spent_bani));
+    else if (typeof run.kept_bani === 'number') meta.push('păstrat: ' + App.format.lei(run.kept_bani));
     const demo = run.kind === 'demo';
     const action = run.has_report === true
       ? h('button', {

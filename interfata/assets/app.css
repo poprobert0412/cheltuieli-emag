@@ -233,6 +233,41 @@ html:not(.js) #screen-loading { display: none; }
 }
 .marker { background: linear-gradient(transparent 8%, var(--hl) 8% 94%, transparent 94%); color: var(--on-hl); padding-inline: 0.12em; white-space: nowrap; }
 
+/* Versiunea programului (mereu vizibilă, discretă) și ce a aflat verificarea versiunii noi (decis 5 oct. 2026, D18).
+   Rândul își păstrează înălțimea și cât e gol, ca apariția versiunii să nu împingă pagina. */
+.app-meta { min-height: 1.5em; margin-top: 6px; font-size: 0.8125rem; line-height: 1.5; color: var(--ink-3); overflow-wrap: anywhere; }
+.app-meta__check::before { content: "·"; content: "·" / ""; margin-inline: 0.45em; } /* separator desenat: fără text pentru cititorul de ecran */
+.app-meta [hidden] + .app-meta__check::before { content: none; }
+
+/* Banda „Versiune nouă”: cutie pe fond de card cu inel de cerneală (ca mesajul de login), deasupra ecranelor. */
+.update { margin-top: 16px; padding: 16px 18px; border: 1px solid var(--ink); border-radius: var(--r-m); background: var(--card); box-shadow: 0 0 0 1px var(--ink); }
+.update__title { font-size: 1.125rem; line-height: 1.3; font-weight: 700; }
+.update__current { font-weight: 400; color: var(--ink-2); white-space: nowrap; }
+.update__notes { margin-top: 6px; }
+.update__notes summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  list-style: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--ink-3);
+}
+.update__notes summary::-webkit-details-marker { display: none; }
+.update__notes[open] summary::before { transform: rotate(45deg); }
+/* „Ce e nou” vine ca text simplu (textContent): rândurile noi din notele lansării rămân rânduri noi, fără HTML. */
+.update__notes-text { margin-top: 2px; padding: 4px 0 4px 12px; border-left: 1px solid var(--rule-2); white-space: pre-line; overflow-wrap: anywhere; font-size: 0.9375rem; max-width: 66ch; }
+.update__actions { margin-top: 12px; }
+.update__run-hint { margin-top: 8px; }
+.update__status { margin-top: 8px; }
+.update__status:empty { min-height: 0; margin-top: 0; } /* zona live rămâne în pagină (altfel n-ar mai fi anunțată), doar fără înălțime */
+.update__link { font-size: 0.875rem; overflow-wrap: anywhere; }
+
 /* ============ 4. Butoane, câmpuri ============ */
 .btn {
   display: inline-flex;
@@ -336,7 +371,7 @@ html:not(.js) #screen-loading { display: none; }
   text-decoration-color: var(--ink-3);
 }
 .options summary::-webkit-details-marker { display: none; }
-.options summary::before, .faq__item summary::after {
+.options summary::before, .faq__item summary::after, .update__notes summary::before {
   content: "";
   flex: none;
   width: 0.5rem;
@@ -459,7 +494,7 @@ html:not(.js) #screen-loading { display: none; }
 @media (max-width: 559px) {
   .btn--xl { width: 100%; }
   .start { justify-items: stretch; }
-  .demo .btn, .block--end .btn { width: 100%; }
+  .demo .btn, .block--end .btn, .update__actions .btn { width: 100%; }
   .report-head .btn { width: 100%; }
   .field__input--short { max-width: none; }
   .theme-toggle__label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
@@ -475,7 +510,7 @@ html:not(.js) #screen-loading { display: none; }
 }
 
 @media (forced-colors: active) {
-  .btn, .theme-toggle, .field__input, .progress__bar, .callout, .error-box, .confirm, .report { border: 1px solid ButtonText; }
+  .btn, .theme-toggle, .field__input, .progress__bar, .callout, .error-box, .confirm, .report, .update { border: 1px solid ButtonText; }
   .btn--primary, .progress__fill { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .btn:disabled { border-color: GrayText; color: GrayText; }
   .step__mark { border-color: ButtonText; forced-color-adjust: none; }

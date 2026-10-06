@@ -5,9 +5,12 @@ cd /d "%~dp0"
 rem Login, o singură dată: deschide browserul, te loghezi tu manual în eMAG, iar sesiunea rămâne
 rem salvată local în .profil_browser. Parola și codul 2FA nu trec prin acest program.
 rem Fără goto și fără etichete: batch-urile cu diacritice UTF-8 pot da erori la etichete.
+rem Rândul care pornește Python e ULTIMUL din fișier și are pe el tot ce urmează (decis 5 oct. 2026, D13): o actualizare
+rem poate înlocui acest fișier cât rulează Python, iar cmd l-ar citi mai departe de la o poziție greșită. Mesajul final și
+rem pauza sunt în instalare\dupa_rulare.bat; «call exit /b» păstrează codul exact. Detalii în porneste.bat.
 title Login eMAG
-set "PYTHONUTF8=1"
-set "PYTHONDONTWRITEBYTECODE=1"
+rem Variabilele comune (unde stau Python-ul, pachetele și browserul descărcate): instalare\mediu.bat.
+call ".\instalare\mediu.bat"
 
 if not exist "ruleaza.py" (
   echo.
@@ -20,7 +23,7 @@ if not exist "ruleaza.py" (
 )
 if not exist ".venv\Scripts\python.exe" (
   echo.
-  echo Programul nu este instalat încă. Rulează mai întâi instaleaza.bat, apoi încearcă din nou.
+  echo Programul nu este pregătit încă. Dă mai întâi dublu-clic pe porneste.bat: pregătește singur tot ce lipsește.
   echo.
   pause
   exit /b 1
@@ -30,17 +33,4 @@ echo.
 echo Se deschide o fereastră de browser. Loghează-te în contul tău eMAG: parola și codul 2FA le introduci tu.
 echo Poți închide fereastra după ce apare mesajul de încheiere.
 echo.
-".venv\Scripts\python.exe" ruleaza.py --doar-login
-set "COD=%ERRORLEVEL%"
-
-echo.
-if "%COD%"=="0" (
-  echo Gata: sesiunea ta eMAG e salvată pe acest calculator, în folderul .profil_browser.
-  echo Tratează acel folder ca pe o parolă: nu îl trimite nimănui.
-  echo Pasul următor: ruleaza.bat
-) else (
-  echo Login-ul nu s-a încheiat cu succes. Citește mesajul de mai sus, apoi rulează din nou login.bat.
-)
-echo.
-pause
-exit /b %COD%
+".venv\Scripts\python.exe" ruleaza.py --doar-login & call ".\instalare\dupa_rulare.bat" login %%ERRORLEVEL%% & call exit /b %%ERRORLEVEL%%

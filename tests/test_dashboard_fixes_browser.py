@@ -228,7 +228,7 @@ def test_cards_keep_table_semantics_labels_and_hide_empty_fields(open_page):
                heads, labels, footVisible, headSize: [headBox.width, headBox.height] }; }""")
     assert info["roles"] == ["table", "rowgroup", "row", "columnheader", "cell"]
     assert info["labels"] == info["heads"]  # eticheta fiecărei celule e antetul coloanei ei
-    assert info["footVisible"] == ["Produs", "Buc", "Valoare"]  # totalul: câmpurile goale nu ocupă loc
+    assert info["footVisible"] == ["Produs", "Buc", "Plătit"]  # totalul: câmpurile goale nu ocupă loc
     assert info["headSize"] == [1, 1]  # antetul rămâne pentru cititoarele de ecran, ascuns doar vizual
 
 
@@ -329,13 +329,15 @@ def test_tables_replaced_by_a_filter_or_show_more_are_released_by_the_component(
 # ---------- liste lungi: paginare ----------
 
 def long_dataset(page, count=250):
-    """Pune în DATA.long un set valid cu `count` rânduri în fiecare listă (nume inventate)."""
+    """Pune în DATA.long un set valid cu `count` rânduri în fiecare listă (nume inventate; sumele plătite egale cu cele de listă)."""
     page.evaluate("""(n) => { const d = JSON.parse(JSON.stringify(DATA.small));
-      d.by_seller = Array.from({ length: n }, (_, i) => ({ seller: 'Vanzator ' + i, units: 1, bani: 250000 - i * 1000 }));
-      d.top_products = Array.from({ length: n }, (_, i) => ({ name: 'Produs ' + i, category: 'Diverse', units: 1, bani: 1000 + i }));
+      d.by_seller = Array.from({ length: n }, (_, i) => ({ seller: 'Vanzator ' + i, units: 1, bani: 250000 - i * 1000, paid_bani: 250000 - i * 1000 }));
+      d.top_products = Array.from({ length: n }, (_, i) => ({ name: 'Produs ' + i, category: 'Diverse', units: 1, bani: 1000 + i, paid_bani: 1000 + i,
+        order_id: String(100000000 + i), order_count: 1 }));
       const excluded = (i) => ({ order_id: 'X' + i, date: '2026-01-01', seller: 'Vanzator', names: ['Asigurare ' + i], products_bani: 100, paid_bani: 100, status_text: 'Plata acceptata' });
       d.paid_only = Array.from({ length: n }, (_, i) => excluded(i)); d.in_progress = [];
-      d.highlights.Alcool.items = Array.from({ length: n }, (_, i) => ({ order_id: 'H' + i, date: '2026-01-01', name: 'Whisky ' + i, qty: 1, amount_bani: 100, state: 'kept' }));
+      d.highlights.Alcool.items = Array.from({ length: n }, (_, i) => ({ order_id: 'H' + i, date: '2026-01-01', name: 'Whisky ' + i, qty: 1, amount_bani: 100,
+        paid_amount_bani: 100, state: 'kept' }));
       d.highlights.Alcool.items_total = n; DATA.long = d; }""", count)
 
 

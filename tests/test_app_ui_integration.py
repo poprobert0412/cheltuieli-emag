@@ -24,6 +24,7 @@ pytest.importorskip("playwright.sync_api")
 app_server = pytest.importorskip("emag_spend.app_server")
 
 from emag_spend.app_runner import AppRunner  # noqa: E402 - după importorskip: modulul există doar dacă serverul există
+from tests.app_support import FakeUpdateJob  # noqa: E402 - job de actualizare fals: nimic nu iese pe internet
 from emag_spend.browser_session import LoginTimeout  # noqa: E402
 from emag_spend.page_fetcher import SessionExpired  # noqa: E402
 from emag_spend.progress import PHASE_FETCHING_ORDERS, PHASE_WAITING_LOGIN  # noqa: E402
@@ -95,7 +96,7 @@ def _new_server(outputs: Path, profile: Path, script: Script | None):
     """Pornește un AppServer cu foldere temporare; îl refac dacă portul ales de sistem e unul blocat de browsere."""
     for _ in range(PORT_ATTEMPTS):
         runner = AppRunner(outputs_dir=outputs, profile_dir=profile, pipeline=script) if script is not None else None
-        server = app_server.AppServer(outputs_dir=outputs, profile_dir=profile, runner=runner, idle_seconds=3600)
+        server = app_server.AppServer(outputs_dir=outputs, profile_dir=profile, runner=runner, idle_seconds=3600, update_job=FakeUpdateJob())
         if server.port not in BROWSER_BLOCKED_PORTS:
             return server
         server.close()
@@ -156,7 +157,7 @@ def test_a_real_demo_run_from_the_start_screen_to_the_downloaded_files(browser, 
         assert page.inner_text("#session-status") == "Nu există sesiune salvată"
         assert page.inner_text("#hist-status").startswith("Nu ai rulări anterioare")
         assert app.server.runner.snapshot()["state"] == "idle"
-        assert page.inner_text("#app-version") == f"Versiunea aplicației: {app_server.APP_VERSION}."
+        assert page.inner_text("#app-version") == f"Versiunea {app_server.APP_VERSION}"
         page.click("#btn-demo")
         wait_screen(page, "working")
         wait_screen(page, "done", timeout=DEMO_RUN_TIMEOUT_MS)

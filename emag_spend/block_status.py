@@ -25,6 +25,11 @@ _RULES: list[tuple[str, str]] = [
     ("comanda plasata", IN_PROGRESS),
     ("predate curierului", IN_PROGRESS),
     ("in drum spre", IN_PROGRESS),
+    # „Produse ajunse in showroom” (văzut pe un cont real, 5 oct. 2026): au ajuns la punctul de ridicare,
+    # dar clientul nu le-a ridicat încă; tot așa orice „ajunse in/la <punct de ridicare>”. După ridicare
+    # eMAG afișează „Produse ridicate”, regulă de mai sus.
+    ("ajunse in", IN_PROGRESS),
+    ("ajunse la", IN_PROGRESS),
     ("in curs de", IN_PROGRESS),
     ("in pregatire", IN_PROGRESS),
     ("pregatit", IN_PROGRESS),

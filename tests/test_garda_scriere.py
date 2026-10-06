@@ -1,10 +1,15 @@
 """Garda de scriere: pe disc apar doar iesiri/, logs/ și .profil_browser/, nimic în Registry, AppData sau folderul personal.
 
-Primește: sursele programului și fluxurile lui rulate pe date inventate (--demo, --din-cache, --sterge-sesiunea).
+Primește: sursele programului și fluxurile lui rulate pe date inventate (--demo, --din-cache, --sterge-sesiunea, --actualizeaza).
 Verifică: (1) static (AST): fără Path.home(), expanduser, variabile de mediu cu foldere personale, tempfile, winreg,
 nici apeluri care află numele contului sau al calculatorului; (2) la execuție: un audit hook notează fiecare scriere,
 ștergere sau creare făcută de program și un blocaj le oprește pe cele din afara folderelor permise (rapoarte, jurnal,
 demo-data.js, profil); în plus, programul nu citește locuri cu parole (profilul real de browser, chei).
+Actualizarea (decis 5 oct. 2026) e singura excepție: scrie doar în .actualizare/ și în fișierele din manifestul validat
+(static: doar funcțiile din UPDATE_WRITE_EXCEPTIONS scriu; la execuție: --actualizeaza pe o copie inventată a programului), iar
+recuperarea pornită de lansatoare (python -m emag_spend.update_recovery, P1) doar în .actualizare/, în căile din jurnal și în logs/.
+Două excepții înguste ale ei (decis 6 oct. 2026): `tempfile` doar ca `tempfile.mkdtemp(dir=...)` (folderul unic de descărcare din
+settings.UPDATE_DOWNLOAD_DIR, N9) și `os.link` doar în update_apply.py (copia de siguranță din .actualizare/vechi, N1).
 Fiecare detector e probat pe cod-capcană. Ce NU face: nu verifică ce scrie Windows sau browserul (Edge, Playwright).
 """
 
@@ -17,8 +22,9 @@ from pathlib import Path
 
 import pytest
 
+from emag_spend import settings
 from tests.garda_audit import FLOWS, AuditRecorder, block_writes_outside, is_inside, isolated_program, prepare_flow, run_flow
-from tests.garda_support import PROGRAM_DIR, dotted_name, parse_source, program_sources, relative, string_constants
+from tests.garda_support import PROGRAM_DIR, dotted_name, parent_map, parse_source, program_sources, relative, string_constants
 
 # ---------- (1) static ----------
 
@@ -45,8 +51,41 @@ PERSONAL_FOLDER_VARIABLES = frozenset({
 STATIC_EXCEPTIONS = {
     ("session_cleaner.py", "Path.home"):
         "doar CITEȘTE calea folderului personal ca să REFUZE ștergerea lui, a părinților lui și a profilului real Edge/Chrome; nu scrie nimic acolo",
+    ("update_apply.py", "link"):
+        "os.link face doar copia de siguranță a unui fișier al programului în .actualizare/vechi (legătură tare în același folder, "
+        "decis 6 oct. 2026, N1), ca fișierul din rădăcină să nu lipsească nicio clipă; nu leagă nimic în afara programului",
 }
 MIN_REASON_LENGTH = 30
+# Singura folosire permisă a lui tempfile (decis 6 oct. 2026, N9): `import tempfile` simplu și doar apeluri
+# `tempfile.mkdtemp(dir=<folder>)`, cu dir dat explicit: un folder unic DOAR în folderul primit (settings.UPDATE_DOWNLOAD_DIR),
+# niciodată în folderul temporar al sistemului. Orice altă formă (gettempdir, NamedTemporaryFile, mkdtemp() fără dir, alias,
+# `from tempfile import`) rămâne interzisă.
+TEMPFILE_ALLOWED_CALL = "mkdtemp"
+TEMPFILE_FOLDER_ARGUMENT = "dir"
+TEMPFILE_EXCEPTION_REASON = ("folderul unic al fiecărei descărcări, creat doar în settings.UPDATE_DOWNLOAD_DIR "
+                             "(tempfile.mkdtemp cu dir= explicit), ca două descărcări să nu-și calce arhivele")
+
+
+def tempfile_only_in_a_given_folder(tree: ast.Module) -> bool:
+    """True dacă fișierul folosește tempfile DOAR ca `import tempfile` + `tempfile.mkdtemp(dir=<ceva care nu e None>)`.
+
+    Un import nefolosit, un alias, `from tempfile import ...` sau orice alt apel → False (rămâne încălcare).
+    """
+    imports = [node for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom))
+               and ((node.module or "").split(".")[0] == "tempfile" if isinstance(node, ast.ImportFrom)
+                    else any(alias.name.split(".")[0] == "tempfile" for alias in node.names))]
+    if any(isinstance(node, ast.ImportFrom) or any(alias.asname for alias in node.names) for node in imports):
+        return False
+    parents = parent_map(tree)
+    uses = [node for node in ast.walk(tree) if isinstance(node, ast.Name) and node.id == "tempfile"]
+    for use in uses:
+        attribute = parents.get(use)
+        call = parents.get(attribute)
+        folder = next((keyword.value for keyword in getattr(call, "keywords", []) if keyword.arg == TEMPFILE_FOLDER_ARGUMENT), None)
+        if not (isinstance(attribute, ast.Attribute) and attribute.attr == TEMPFILE_ALLOWED_CALL and isinstance(call, ast.Call)
+                and call.func is attribute and folder is not None and not (isinstance(folder, ast.Constant) and folder.value is None)):
+            return False
+    return bool(uses)
 
 
 def _environment_key(node: ast.AST) -> str | None:
@@ -72,10 +111,13 @@ def python_write_violations(tree: ast.Module, filename: str) -> list[tuple[str, 
         """Adaugă (ce, mesaj) cu fișierul și linia nodului."""
         problems.append((what, f"{filename}:{node.lineno}: {why}"))
 
+    tempfile_allowed = tempfile_only_in_a_given_folder(tree)
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)) and not (isinstance(node, ast.ImportFrom) and node.level):
             for name in ([a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""]):
                 root = name.split(".")[0]
+                if root == "tempfile" and tempfile_allowed:
+                    continue  # doar tempfile.mkdtemp(dir=...): vezi TEMPFILE_EXCEPTION_REASON
                 if root in FORBIDDEN_IMPORTS:
                     add(node, root, f"importă «{root}» ({FORBIDDEN_IMPORTS[root]}): programul scrie doar în folderul lui")
         if isinstance(node, ast.Attribute) and node.attr in FORBIDDEN_ATTRIBUTES:
@@ -123,12 +165,30 @@ def test_static_exceptions_are_justified_and_still_needed():
     ("import os\nx = os.environ['APPDATA']", "APPDATA"), ("import os\nx = os.getenv('LOCALAPPDATA')", "LOCALAPPDATA"),
     ("import os\nx = os.environ.get('userprofile')", "userprofile"), ("import os\nx = os.environ['TEMP']", "TEMP"),
     ("import os\nx = os.getlogin()", "getlogin"), ("import socket\nx = socket.gethostname()", "gethostname"),
-    ("import os\nos.symlink('a', 'b')", "symlink"),
+    ("import os\nos.symlink('a', 'b')", "symlink"), ("import os\nos.link('a', 'b')", "link"),
+    ("import tempfile\nx = tempfile.mkdtemp()", "tempfile"), ("import tempfile\nx = tempfile.gettempdir()", "tempfile"),
+    ("import tempfile\nx = tempfile.mkdtemp(dir=None)", "tempfile"), ("from tempfile import mkdtemp\nx = mkdtemp(dir='f')", "tempfile"),
+    ("import tempfile as t\nx = t.mkdtemp(dir='f')", "tempfile"),
+    ("import tempfile\nx = tempfile.mkdtemp(dir='f')\ny = tempfile.NamedTemporaryFile()", "tempfile"),
 ])
 def test_write_detector_catches_trap_code(source, expected):
-    """Capcană: Path.home, expanduser, variabile AppData/Temp, tempfile, winreg, getuser și symlink trebuie prinse."""
+    """Capcană: Path.home, expanduser, variabile AppData/Temp, tempfile (orice altceva decât mkdtemp(dir=...)), winreg, getuser, link."""
     found = {what for what, _ in python_write_violations(ast.parse(source), "emag_spend/capcana.py")}
     assert expected in found, f"nu a fost prins «{expected}» în:\n{source}\n(prins: {sorted(found)})"
+
+
+def test_tempfile_is_allowed_only_to_make_a_folder_inside_a_given_folder():
+    """Fals pozitiv: `tempfile.mkdtemp(dir=folder)` (folder unic în folderul dat) nu e o încălcare."""
+    allowed = "import tempfile\nfrom pathlib import Path\ndef f(folder):\n    return Path(tempfile.mkdtemp(prefix='x', dir=folder))\n"
+    assert python_write_violations(ast.parse(allowed), "emag_spend/curat.py") == []
+
+
+def test_the_tempfile_exception_is_justified_and_still_needed():
+    """Excepția pentru tempfile are motiv scris și măcar o sursă a programului chiar folosește tempfile.mkdtemp(dir=...)."""
+    assert len(TEMPFILE_EXCEPTION_REASON.strip()) >= MIN_REASON_LENGTH
+    users = [relative(path) for path in program_sources() if "tempfile" in path.read_text(encoding="utf-8")
+             and tempfile_only_in_a_given_folder(parse_source(path))]
+    assert users, "nicio sursă nu mai folosește tempfile.mkdtemp(dir=...): scoate excepția"
 
 
 def test_write_detector_ignores_docstrings_and_ordinary_paths():
@@ -154,6 +214,9 @@ WRITE_AUDIT_EVENTS = (
 )
 # Evenimente care nu au voie deloc: Registry și foldere temporare ale sistemului.
 FORBIDDEN_AUDIT_EVENTS = ("tempfile.", "winreg.")
+# Singurul eveniment tempfile permis: mkdtemp cu dir= explicit (TEMPFILE_EXCEPTION_REASON); calea lui se verifică apoi ca orice
+# scriere (trebuie să fie în folderele permise), deci un mkdtemp în folderul Temp al sistemului tot pică.
+ALLOWED_TEMPFILE_EVENTS = frozenset({"tempfile.mkdtemp"})
 # Fragmente de cale (cu litere mici) ale unor locuri cu parole sau chei: programul nu are niciun motiv să le deschidă.
 SENSITIVE_READ_MARKERS = (
     "/user data/", "login data", "/cookies", ".ssh", ".aws", ".gnupg", "ntuser.dat", "id_rsa", "id_ed25519", "/credentials", "keychain",
@@ -165,6 +228,11 @@ EXPECTED_TOP_LEVEL = frozenset({"iesiri", "logs", "site", "cache", "profil"})
 def _describe(events) -> str:
     """Evenimentele de audit într-un singur text: nume, căi și locul din cod."""
     return "; ".join(f"{event.name} {event.paths()} la {event.where}" for event in events)
+
+
+def _forbidden(events) -> list:
+    """Evenimentele care ating Registry sau folderele temporare ale sistemului (fără mkdtemp cu dir=, verificat apoi pe cale)."""
+    return [event for event in events if event.name.startswith(FORBIDDEN_AUDIT_EVENTS) and event.name not in ALLOWED_TEMPFILE_EVENTS]
 
 
 @pytest.mark.parametrize("flow", FLOWS)
@@ -180,7 +248,7 @@ def test_program_flows_write_only_in_their_own_folders(flow, tmp_path, monkeypat
     assert not violations, "scrieri sau ștergeri ale programului în afara folderelor permise (blocate de test):\n  " + "\n  ".join(violations)
 
     writes = [e for e in audit.events if e.name != "open" or e.is_write_open()]
-    assert not [e for e in writes if e.name.startswith(FORBIDDEN_AUDIT_EVENTS)], f"programul a atins Registry sau folderul Temp al sistemului: {_describe(writes)}"
+    assert not _forbidden(writes), f"programul a atins Registry sau folderul Temp al sistemului: {_describe(writes)}"
     outside = [e for e in writes if not all(is_inside(path, layout.writable_roots) for path in e.paths())]
     assert not outside, f"scrieri în afara folderelor permise {[str(r) for r in layout.writable_roots]}: {_describe(outside)}"
 
@@ -294,7 +362,7 @@ def test_the_local_application_writes_only_in_its_own_folders(tmp_path, monkeypa
     assert not violations, "scrieri sau ștergeri ale aplicației în afara folderelor permise (blocate de test):\n  " + "\n  ".join(violations)
 
     writes = [e for e in audit.events if e.name != "open" or e.is_write_open()]
-    assert not [e for e in writes if e.name.startswith(FORBIDDEN_AUDIT_EVENTS)], f"aplicația a atins Registry sau folderul Temp al sistemului: {_describe(writes)}"
+    assert not _forbidden(writes), f"aplicația a atins Registry sau folderul Temp al sistemului: {_describe(writes)}"
     outside = [e for e in writes if not all(is_inside(path, layout.writable_roots) for path in e.paths())]
     assert not outside, f"scrieri ale aplicației în afara folderelor permise {[str(r) for r in layout.writable_roots]}: {_describe(outside)}"
     assert any(is_inside(path, (layout.out,)) for e in writes for path in e.paths()) and any(layout.out.rglob("raport.html")), "auditul n-a văzut scrierea raportului: hook-ul nu prinde nimic și testul n-ar dovedi nimic"
@@ -306,14 +374,256 @@ def test_the_local_application_writes_only_in_its_own_folders(tmp_path, monkeypa
     assert not unexpected, f"au apărut fișiere sau foldere neașteptate lângă rezultate: {unexpected}"
 
 
+def _is_text_replace(node: ast.Call) -> bool:
+    """True pentru `text.replace(vechi, nou)` (înlocuire de text, 2-3 argumente), nu pentru mutarea unui fișier.
+
+    Mutările de fișiere sunt `Path.replace(țintă)` (un singur argument) și `os.replace(sursă, țintă)` (chemat pe modulul os):
+    pe acelea garda le prinde în continuare.
+    """
+    receiver = node.func.value if isinstance(node.func, ast.Attribute) else None
+    on_os_module = isinstance(receiver, ast.Name) and receiver.id == "os"
+    return node.func.attr == "replace" and not on_os_module and len(node.args) in (2, 3)
+
+
+def test_text_replace_is_not_mistaken_for_a_file_move():
+    """Garda deosebește `text.replace("\\n", "")` (text) de `Path(...).replace(țintă)` și `os.replace(a, b)` (fișiere)."""
+    calls = [node for node in ast.walk(ast.parse('t.replace("a", "b")\np.replace(t2)\nos.replace(a, b)')) if isinstance(node, ast.Call)]
+    assert [_is_text_replace(call) for call in calls] == [True, False, False]
+
+
 def test_the_application_code_never_deletes_or_writes_anything_by_itself():
     """Static: în afară de pipeline (apelat din app_runner) și de ștergerea sesiunii (session_cleaner), modulele aplicației nu scriu și nu șterg nimic pe disc."""
     forbidden_calls = {"write_text", "write_bytes", "mkdir", "unlink", "rmdir", "rename", "replace", "rmtree", "remove", "touch", "truncate", "copyfile", "copy", "move"}
     for name in ("app_server.py", "app_security.py", "app_runs.py", "app_static.py", "app_errors.py", "app_opener.py", "run_ids.py", "progress.py"):
         tree = parse_source(PROGRAM_DIR / name)
         found = [f"{name}:{node.lineno}: .{node.func.attr}()" for node in ast.walk(tree)
-                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in forbidden_calls]
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in forbidden_calls
+                 and not _is_text_replace(node)]
         opened_for_write = [f"{name}:{node.lineno}: open(..., {ast.unparse(node.args[1])})" for node in ast.walk(tree)
                             if isinstance(node, ast.Call) and dotted_name(node.func) == "open" and len(node.args) > 1
                             and isinstance(node.args[1], ast.Constant) and any(letter in str(node.args[1].value) for letter in "wax+")]
         assert not found and not opened_for_write, f"{name} scrie sau șterge pe disc, dar el doar citește: {found + opened_for_write}"
+
+
+# ---------- actualizarea: singurul cod care scrie în folderul programului (decis 5 oct. 2026) ----------
+
+# Apeluri care scriu, mută, șterg sau schimbă drepturi pe disc (pe lângă open/os.open în mod de scriere).
+DISK_WRITE_CALLS = frozenset({
+    "write_text", "write_bytes", "mkdir", "makedirs", "unlink", "rmdir", "rename", "replace", "rmtree", "remove", "touch",
+    "truncate", "copyfile", "copy", "move", "chmod", "utime",
+})
+WRITE_MODE_LETTERS = "wax+"
+# Modulele actualizării care au voie să scrie și unde: (fișier, funcție sau "*" pentru tot fișierul) -> motivul.
+# Orice altă funcție din update_*.py și version.py nu scrie și nu șterge nimic; fiecare excepție trebuie să fie încă necesară.
+UPDATE_WRITE_EXCEPTIONS = {
+    ("update_http.py", "download_to"):
+        "scrie arhiva descărcată doar în ținta primită (<țintă>.part, apoi os.replace); update_download.py o pune în settings.UPDATE_WORK_DIR",
+    ("update_http.py", "_remove_quietly"):
+        "șterge doar fișierul .part al unei descărcări eșuate, lângă ținta din settings.UPDATE_WORK_DIR",
+    ("update_download.py", "download_release"):
+        "creează doar folderul de descărcare primit, din settings.UPDATE_WORK_DIR",
+    ("update_download.py", "_remove_quietly"):
+        "șterge doar arhiva greșită și SHA256SUMS.txt din folderul de descărcare (settings.UPDATE_WORK_DIR)",
+    ("update_download.py", "_new_download_folder"):
+        "creează doar settings.UPDATE_DOWNLOAD_DIR și, în el, folderul unic al unei descărcări (tempfile.mkdtemp(dir=...), N9)",
+    ("update_download.py", "_remove_download_folder"):
+        "șterge doar fișierele din folderul unic al descărcării, folderul însuși și settings.UPDATE_DOWNLOAD_DIR rămas gol (N9)",
+    ("update_lock.py", "*"):
+        "creează (o singură dată) doar fișierul-lacăt gol .actualizare/lacat și folderul lui; nu-l șterge niciodată (N5)",
+    ("update_apply.py", "*"):
+        "scrie în rădăcina programului doar căile din manifestul validat (și folderele lor) și în .actualizare/; dovedit la execuție "
+        "de test_update_flow_writes_only_in_the_work_dir_and_manifest_paths",
+    ("update_recovery.py", "*"):
+        "mută înapoi doar căile din jurnalul validat (fără căi protejate), curăță doar .actualizare/ (jurnal, nou/, vechi/, copie/ și "
+        "descărcările oprite din descarcari/) și, pornit de lansatoare, scrie jurnalul pornirii în logs/; dovedit la execuție de "
+        "test_update_flow_writes_only_in_the_work_dir_and_manifest_paths (aplicarea îl folosește) și de "
+        "test_the_launcher_recovery_writes_only_in_its_work_dir_the_journal_paths_and_logs",
+}
+# Modulele în care tot fișierul are voie să scrie: doar cele ale căror scrieri le verifică la execuție fluxul --actualizeaza.
+WHOLE_FILE_WRITERS_PROVEN_AT_RUNTIME = frozenset({"update_apply.py", "update_lock.py", "update_recovery.py"})
+
+
+def _update_sources() -> list:
+    """Modulele actualizării verificate static: emag_spend/update_*.py și version.py."""
+    return sorted([*PROGRAM_DIR.glob("update_*.py"), PROGRAM_DIR / "version.py"])
+
+
+def _opens_for_writing(node: ast.Call) -> bool:
+    """True pentru open(..., "w"/"a"/"x"/"+") sau cale.open("wb") cu mod literal, și pentru orice os.open (creare la nivel jos)."""
+    name = dotted_name(node.func)
+    if name == "os.open":
+        return True
+    is_open = name == "open" or (isinstance(node.func, ast.Attribute) and node.func.attr == "open")
+    if not is_open:
+        return False
+    position = 1 if name == "open" else 0
+    modes = [node.args[position]] if len(node.args) > position else []
+    modes += [keyword.value for keyword in node.keywords if keyword.arg == "mode"]
+    return any(isinstance(mode, ast.Constant) and any(letter in str(mode.value) for letter in WRITE_MODE_LETTERS) for mode in modes)
+
+
+def disk_write_calls(tree: ast.Module) -> list[tuple[str, int, str]]:
+    """(funcția care o conține, linia, apelul) pentru fiecare apel care scrie pe disc; funcțiile din clase apar ca „Clasă.metodă”."""
+    parents = parent_map(tree)
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        attribute_write = isinstance(node.func, ast.Attribute) and node.func.attr in DISK_WRITE_CALLS and not _is_text_replace(node)
+        if not (attribute_write or _opens_for_writing(node)):
+            continue
+        names, current = [], parents.get(node)
+        while current is not None:
+            if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                names.append(current.name)
+            current = parents.get(current)
+        found.append((".".join(reversed(names)) or "<modul>", node.lineno, ast.unparse(node.func)))
+    return found
+
+
+def _allowed_update_write(file: str, function: str) -> bool:
+    """True dacă funcția are voie să scrie după UPDATE_WRITE_EXCEPTIONS (exact, sau tot fișierul cu "*")."""
+    return (file, function) in UPDATE_WRITE_EXCEPTIONS or (file, "*") in UPDATE_WRITE_EXCEPTIONS
+
+
+@pytest.mark.parametrize("path", _update_sources(), ids=lambda path: path.name)
+def test_update_modules_write_only_where_an_exception_says_why(path):
+    """Static: în modulele actualizării scriu doar funcțiile din UPDATE_WRITE_EXCEPTIONS (verificarea, versiunea, regulile arhivei nu scriu)."""
+    found = [f"{path.name}:{line}: {call}() în {function}" for function, line, call in disk_write_calls(parse_source(path))
+             if not _allowed_update_write(path.name, function)]
+    assert not found, "scrieri pe disc fără excepție justificată în UPDATE_WRITE_EXCEPTIONS:\n  " + "\n  ".join(found)
+
+
+def test_update_write_exceptions_are_justified_and_still_needed():
+    """Fiecare excepție de scriere a actualizării are motiv scris, fișierul există și funcția (sau fișierul) chiar scrie.
+
+    O excepție pe tot fișierul ("*") e permisă doar pentru modulele dovedite la execuție de fluxul --actualizeaza de mai jos.
+    """
+    for (file, function), reason in UPDATE_WRITE_EXCEPTIONS.items():
+        assert len(reason.strip()) >= MIN_REASON_LENGTH, f"excepția {file}/{function} nu are motiv scris"
+        assert function != "*" or file in WHOLE_FILE_WRITERS_PROVEN_AT_RUNTIME, f"excepția {file}/* e prea largă: numește funcția care scrie"
+        source = PROGRAM_DIR / file
+        assert source.is_file(), f"excepția {file}/{function}: fișierul nu mai există; scoate excepția"
+        writers = {name for name, _, _ in disk_write_calls(parse_source(source))}
+        assert writers if function == "*" else function in writers, f"excepția {file}/{function} nu mai e necesară (nu mai scrie): scoate-o"
+
+
+def test_the_write_call_detector_catches_trap_code_and_names_the_function():
+    """Capcană: os.replace, os.open, open("wb"), cale.open("a"), write_bytes, chmod, rmdir sunt prinse, cu funcția care le conține."""
+    source = textwrap.dedent('''
+        import os
+        def muta(a, b):
+            os.replace(a, b)
+        class Lacat:
+            def ia(self, p):
+                return os.open(p, os.O_CREAT)
+        def scrie(p):
+            with open(p, "wb") as f:
+                f.write(b"x")
+            p.open(mode="a").close()
+            p.write_bytes(b"")
+            os.chmod(p, 0o755)
+            os.rmdir(p.parent)
+        def citeste(p, text):
+            return open(p, "rb").read(), p.open().read(), text.replace("a", "b")
+    ''')
+    found = {(function, call) for function, _, call in disk_write_calls(ast.parse(source))}
+    assert found == {("muta", "os.replace"), ("Lacat.ia", "os.open"), ("scrie", "open"), ("scrie", "p.open"), ("scrie", "p.write_bytes"),
+                     ("scrie", "os.chmod"), ("scrie", "os.rmdir")}
+
+
+def test_update_flow_writes_only_in_the_work_dir_and_manifest_paths(tmp_path, monkeypatch):
+    """La execuție: `--actualizeaza --fara-confirmare` cu un GitHub fals, pe o copie inventată a programului, scrie doar în
+    .actualizare/, în jurnal și în fișierele din manifeste (vechi și nou) și în folderele lor; datele utilizatorului rămân."""
+    from emag_spend.update_archive import ancestors
+    from emag_spend.version import VERSION
+    from tests.update_archive_support import MANIFEST, FakeGitHub, add_user_data, archive_bytes, install_program, newer_than, program_files
+
+    monkeypatch.setattr(sys, "dont_write_bytecode", True)
+    root = tmp_path / "program"
+    old_files = program_files(VERSION, extra={"docs/vechi/de_sters.md": b"doar in versiunea veche\n"})
+    install_program(root, VERSION, old_files)
+    user = add_user_data(root)
+    new = newer_than(VERSION)
+    new_files = program_files(new, extra={"docs/nou/pagina.md": "pagină nouă, inventată\n".encode("utf-8")})
+    manifest_paths = {*old_files, *new_files, MANIFEST}
+    manifest_folders = {folder for path in manifest_paths for folder in ancestors(path)}
+    work = root / ".actualizare"
+    monkeypatch.setattr(settings, "PROJECT_ROOT", root)
+    monkeypatch.setattr(settings, "UPDATE_WORK_DIR", work)
+    monkeypatch.setattr(settings, "UPDATE_DOWNLOAD_DIR", work / "descarcari")
+    with isolated_program(monkeypatch, tmp_path) as layout:
+        FakeGitHub(new, archive_bytes(new, new_files)).install(monkeypatch)
+        violations = block_writes_outside(monkeypatch, (root, layout.logs))  # plasă de siguranță: nimic în afara copiei și a jurnalului
+        with AuditRecorder(WRITE_AUDIT_EVENTS) as audit:
+            code = run_flow(["--actualizeaza", "--fara-confirmare"])
+    assert code == 0, "actualizarea n-a reușit, deci testul n-ar dovedi nimic"
+    assert not violations, "scrieri ale actualizării în afara copiei programului:\n  " + "\n  ".join(violations)
+
+    real_root = Path(os.path.realpath(root))
+
+    def allowed(path: str) -> bool:
+        """În .actualizare/ sau în jurnal; altfel exact un fișier din manifeste sau un folder al lor."""
+        if is_inside(path, (work, layout.logs)):
+            return True
+        try:
+            relative = Path(os.path.realpath(path)).relative_to(real_root).as_posix()
+        except ValueError:
+            return False
+        return relative in manifest_paths or relative in manifest_folders
+
+    writes = [e for e in audit.events if e.name != "open" or e.is_write_open()]
+    assert not _forbidden(writes), f"actualizarea a atins Registry sau Temp: {_describe(writes)}"
+    outside = [e for e in writes if not all(allowed(path) for path in e.paths())]
+    assert not outside, f"actualizarea a scris în afara lui .actualizare/ și a fișierelor din manifest: {_describe(outside)}"
+    version_file = os.path.realpath(root / "emag_spend" / "version.py")
+    assert any(version_file in [os.path.realpath(p) for p in e.paths()] for e in writes), \
+        "auditul n-a văzut mutarea fișierelor în rădăcină: hook-ul nu prinde nimic și testul n-ar dovedi nimic"
+    assert all((root / name).read_bytes() == data for name, data in user.items()), "actualizarea a schimbat datele utilizatorului"
+    assert (root / "emag_spend" / "version.py").read_bytes() == new_files["emag_spend/version.py"]
+    assert not (root / "docs" / "vechi").exists()
+    assert sorted(os.listdir(work)) == ["lacat"], "după actualizare, în .actualizare rămâne doar lacătul gol (N5, N9)"
+    assert any(e.name == "tempfile.mkdtemp" and is_inside(e.paths()[0], (work / "descarcari",)) for e in writes), \
+        "descărcarea trebuia să meargă într-un folder unic din settings.UPDATE_DOWNLOAD_DIR (N9)"
+    unexpected = sorted(set(os.listdir(tmp_path)) - {"program", "logs"})
+    assert not unexpected, f"au apărut fișiere sau foldere neașteptate lângă copia programului: {unexpected}"
+
+
+def test_the_launcher_recovery_writes_only_in_its_work_dir_the_journal_paths_and_logs(tmp_path, monkeypatch):
+    """La execuție (P1): punctul de intrare al lansatoarelor (update_recovery.main, ce rulează `python -m emag_spend.update_recovery`) pe
+    o copie inventată pe jumătate actualizată scrie doar în .actualizare/, în căile din jurnal și în logs/ ale copiei; nimic altundeva."""
+    from emag_spend import update_recovery
+    from emag_spend.version import VERSION
+    from tests.update_archive_support import install_program, newer_than, write_journal_by_hand
+
+    monkeypatch.setattr(sys, "dont_write_bytecode", True)
+    root = tmp_path / "program"
+    install_program(root, VERSION)
+    work, logs = root / update_recovery.WORK_DIR_NAME, root / update_recovery.LOGS_DIR_NAME
+    (work / update_recovery.OLD_DIR_NAME).mkdir(parents=True)
+    os.replace(root / "ruleaza.py", work / update_recovery.OLD_DIR_NAME / "ruleaza.py")
+    (root / "ruleaza.py").write_text("print('versiunea nouă, pe jumătate instalată')\n", encoding="utf-8")
+    journal_paths = {"ruleaza.py"}
+    write_journal_by_hand(work, VERSION, newer_than(VERSION), scrise=sorted(journal_paths), existau=sorted(journal_paths))
+    violations = block_writes_outside(monkeypatch, (root,))
+    with AuditRecorder(WRITE_AUDIT_EVENTS) as audit:
+        code = update_recovery.main([], root)
+    assert code == update_recovery.EXIT_RECOVERY_OK, "recuperarea n-a reușit, deci testul n-ar dovedi nimic"
+    assert not violations, "scrieri ale recuperării în afara copiei programului:\n  " + "\n  ".join(violations)
+    real_root = Path(os.path.realpath(root))
+
+    def allowed(path: str) -> bool:
+        """În .actualizare/ sau în logs/ ale copiei; altfel exact o cale din jurnal."""
+        if is_inside(path, (work, logs)):
+            return True
+        try:
+            return Path(os.path.realpath(path)).relative_to(real_root).as_posix() in journal_paths
+        except ValueError:
+            return False
+
+    writes = [e for e in audit.events if e.name != "open" or e.is_write_open()]
+    assert not _forbidden(writes), f"recuperarea a atins Registry sau Temp: {_describe(writes)}"
+    outside = [e for e in writes if not all(allowed(path) for path in e.paths())]
+    assert not outside, f"recuperarea a scris în afara lui .actualizare/, logs/ și a căilor din jurnal: {_describe(outside)}"
+    assert any(is_inside(path, (logs,)) for e in writes for path in e.paths()), "auditul n-a văzut jurnalul pornirii: testul n-ar dovedi nimic"
+    assert sorted(os.listdir(tmp_path)) == ["program"], "au apărut fișiere sau foldere lângă copia programului"

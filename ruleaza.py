@@ -17,7 +17,19 @@ Folosire (din folderul proiectului):
                                            cu butonul din pagină sau singură, după o perioadă fără activitate; nu se combină
                                            cu alte opțiuni, în afară de:
     python ruleaza.py --aplicatie --fara-browser   nu deschide browserul; scrie adresa COMPLETĂ (cu cheia de acces) în consolă
+    python ruleaza.py --versiune           scrie versiunea programului („Cheltuieli eMAG X.Y.Z”); nu se combină cu alte opțiuni
+    python ruleaza.py --actualizeaza       caută pe GitHub o versiune nouă, arată ce e nou și, după ce scrii exact DA, o descarcă,
+                                           îi verifică amprenta și o instalează (datele tale rămân); nu se combină cu alte
+                                           opțiuni, în afară de:
+    python ruleaza.py --actualizeaza --fara-confirmare   fără întrebare (pentru scripturi și teste)
 Rezultatele apar în iesiri/<data>_<ora>/ (raport.html, produse.csv, rezumat.txt).
+O actualizare întreruptă (curent căzut, fereastră închisă) se anulează la pornire. porneste.bat, porneste.sh și porneste.command o fac
+înaintea pregătirii, prin `python -m emag_spend.update_recovery` (decis 6 oct. 2026, P1); aici, înaintea oricărui alt import din
+emag_spend (N2), se face pentru orice altă pornire: programul revine la versiunea veche, spune asta, trece în jurnal tot ce a notat
+recuperarea (P6) și face apoi comanda cerută; dacă revenirea nu se poate face acum (alt proces aplică o actualizare, jurnal deteriorat,
+fișier blocat), scrie de ce (pe ecran și în logs/) și iese cu 1, fără să ruleze altceva.
+--aplicatie iese cu codul 75 după o actualizare instalată din pagină: porneste.bat, porneste.command și porneste.sh îl pornesc din nou
+singuri; pornit direct (python ruleaza.py --aplicatie), spune să fie pornit din nou.
 """
 
 import argparse
@@ -27,15 +39,63 @@ import math
 import sys
 from pathlib import Path
 
+# N2: recuperarea rulează înaintea oricărui alt import din emag_spend sau din pachete. După o actualizare întreruptă arborele poate fi
+# amestecat (un modul nou care cere altul încă nemutat), iar orice import de mai jos ar putea cădea înainte ca programul să revină.
+# update_recovery.py folosește doar biblioteca standard și update_lock.py (garda: tests/test_update_recovery.py).
+from emag_spend.update_recovery import LOG_STARTUP_OUTCOME, LOGS_DIR_NAME, RecoveryOutcome, recover_before_start, write_startup_log
+
+PROGRAM_FOLDER = Path(__file__).resolve().parent
+STARTUP_RECOVERY: RecoveryOutcome = recover_before_start(PROGRAM_FOLDER)
+if STARTUP_RECOVERY.error is not None and __name__ == "__main__":
+    # Fișierele pot fi încă amestecate (sau alt proces le mută chiar acum): nimic altceva din program nu se importă sau rulează,
+    # nici run_logger. Urma în logs/ (ce fișier a blocat, P6) o scrie recuperarea, tot doar cu biblioteca standard.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    try:
+        write_startup_log(PROGRAM_FOLDER / LOGS_DIR_NAME, STARTUP_RECOVERY)
+    except OSError:
+        pass  # fără jurnal pe disc, eroarea tot se afișează
+    print(f"\nEROARE: {STARTUP_RECOVERY.error}")
+    raise SystemExit(1)
+
+# Abia de aici încolo: restul programului, din versiunea întreagă (veche sau nouă) lăsată de recuperare.
 from playwright.async_api import Error as PlaywrightError
 
 from emag_spend import session_cleaner, settings
 from emag_spend.app_opener import open_app_page
-from emag_spend.app_server import STOP_IDLE, STOP_INTERRUPTED, STOP_SHUTDOWN, AppServer
+from emag_spend.app_server import STOP_IDLE, STOP_INTERRUPTED, STOP_SHUTDOWN, STOP_UPDATED, AppServer
 from emag_spend.browser_session import login_only
 from emag_spend.report_opener import open_report
 from emag_spend.run_logger import setup_logging
 from emag_spend.run_pipeline import RunOptions, run
+from emag_spend.update_apply import MESSAGE_GIT_CHECKOUT, PROGRESS_INSTALLING, apply_update, is_git_checkout
+from emag_spend.update_check import STATUS_NEW, STATUS_UP_TO_DATE, check_for_update
+from emag_spend.update_download import STAGE_DOWNLOAD, STAGE_VERIFY, download_folder, download_release
+from emag_spend.update_errors import UpdateError
+from emag_spend.version import VERSION
+
+PROGRAM_NAME = "Cheltuieli eMAG"
+# Opțiunile care fac singure o treabă întreagă (ștergere, server, actualizare, versiune) și singurele opțiuni acceptate lângă ele:
+# nu se amestecă cu nimic care citește contul sau face un raport.
+EXCLUSIVE_OPTIONS = {
+    "--sterge-sesiunea": ("--fara-confirmare",),
+    "--aplicatie": ("--fara-browser",),
+    "--actualizeaza": ("--fara-confirmare",),
+    "--versiune": (),
+}
+# Opțiunile care au sens doar lângă una dintre cele de mai sus.
+COMPANION_OPTIONS = {
+    "--fara-confirmare": ("--sterge-sesiunea", "--actualizeaza"),
+    "--fara-browser": ("--aplicatie",),
+}
+# Ce se scrie pe ecran la fiecare etapă raportată de download_release și apply_update.
+UPDATE_STAGE_MESSAGES = {
+    STAGE_DOWNLOAD: "Descarc arhiva versiunii noi de pe GitHub...",
+    STAGE_VERIFY: "Verific amprenta SHA-256 a arhivei...",
+    PROGRESS_INSTALLING: "Instalez versiunea nouă (datele tale din iesiri/, logs/ și sesiunea eMAG rămân neatinse)...",
+}
+UPDATE_INTERRUPTED_MESSAGE = ("Actualizarea a fost oprită cu Ctrl+C. Dacă instalarea începuse, programul a revenit la versiunea veche "
+                              "(sau revine singur la pornirea următoare).")
 
 
 def _threshold_lei(text: str) -> float:
@@ -73,27 +133,29 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--sterge-sesiunea", action="store_true",
                         help="șterge sesiunea eMAG salvată (profilul de browser), după confirmare; nu se combină cu alte opțiuni")
     parser.add_argument("--fara-confirmare", action="store_true",
-                        help="doar cu --sterge-sesiunea: șterge fără să întrebe (pentru scripturi și teste)")
+                        help="doar cu --sterge-sesiunea sau --actualizeaza: nu mai întreabă (pentru scripturi și teste)")
     parser.add_argument("--aplicatie", action="store_true",
                         help="pornește aplicația locală cu un singur buton (server doar pe acest calculator, pagina în browser); nu se combină cu alte opțiuni")
     parser.add_argument("--fara-browser", action="store_true",
                         help="doar cu --aplicatie: nu deschide browserul și scrie adresa completă, cu cheia de acces (pentru teste, WSL, servere)")
+    parser.add_argument("--versiune", action="store_true", help=f"scrie versiunea programului ({PROGRAM_NAME} X.Y.Z); se folosește singură")
+    parser.add_argument("--actualizeaza", action="store_true",
+                        help="caută o versiune nouă pe GitHub și o instalează după confirmare; nu se combină cu alte opțiuni")
     args = parser.parse_args(argv)
-    # --sterge-sesiunea e distructivă, iar --aplicatie pornește un server: nu se amestecă cu nimic care citește contul sau face un raport.
-    given = [flag for flag, used in (
+    used = [flag for flag, present in (
         ("--prag", args.prag is not None), ("--limita-comenzi", args.limita_comenzi is not None),
         ("--din-cache", args.din_cache is not None), ("--iesire", args.iesire is not None),
         ("--deschide", args.deschide), ("--doar-login", args.doar_login), ("--demo", args.demo),
-        ("--aplicatie", args.aplicatie)) if used]
-    if args.sterge_sesiunea and given:
-        parser.error(f"--sterge-sesiunea nu se combină cu {', '.join(given)} (doar cu --fara-confirmare)")
-    if args.fara_confirmare and not args.sterge_sesiunea:
-        parser.error("--fara-confirmare se folosește doar împreună cu --sterge-sesiunea")
-    other_than_app = [flag for flag in given if flag != "--aplicatie"]
-    if args.aplicatie and other_than_app:
-        parser.error(f"--aplicatie nu se combină cu {', '.join(other_than_app)} (doar cu --fara-browser)")
-    if args.fara_browser and not args.aplicatie:
-        parser.error("--fara-browser se folosește doar împreună cu --aplicatie")
+        ("--sterge-sesiunea", args.sterge_sesiunea), ("--aplicatie", args.aplicatie), ("--actualizeaza", args.actualizeaza),
+        ("--versiune", args.versiune), ("--fara-confirmare", args.fara_confirmare), ("--fara-browser", args.fara_browser)) if present]
+    for option, allowed in EXCLUSIVE_OPTIONS.items():
+        others = [flag for flag in used if flag != option and flag not in allowed]
+        if option in used and others:
+            company = f"doar cu {' sau '.join(allowed)}" if allowed else "se folosește singură"
+            parser.error(f"{option} nu se combină cu {', '.join(others)} ({company})")
+    for option, partners in COMPANION_OPTIONS.items():
+        if option in used and not any(partner in used for partner in partners):
+            parser.error(f"{option} se folosește doar împreună cu {' sau '.join(partners)}")
     if args.prag is None:
         args.prag = settings.BIG_PURCHASE_THRESHOLD_LEI
     # --demo nu citește nimic din cont: combinațiile de mai jos n-ar avea sens, deci le refuzăm clar.
@@ -118,6 +180,8 @@ APP_STOP_MESSAGES = {
     STOP_SHUTDOWN: "Aplicația a fost închisă din pagină.",
     STOP_IDLE: "Aplicația s-a oprit singură: nu a mai venit nicio cerere de mult timp.",
     STOP_INTERRUPTED: "Aplicația a fost oprită cu Ctrl+C.",
+    STOP_UPDATED: ("Programul a fost actualizat. Lansatorul (porneste.bat, porneste.command, porneste.sh) îl pornește din nou singur, "
+                   "cu versiunea nouă; dacă l-ai pornit altfel, pornește-l tu din nou."),
 }
 GENERIC_APP_STOP_MESSAGE = "Aplicația s-a oprit."
 ROMANIAN_PLURAL_SMALL_NUMBER_LIMIT = 20  # de la 20 în sus, numărul cere „de” (20 de minute); sub 20, nu (2 minute, 15 minute)
@@ -136,7 +200,8 @@ def _minutes_text(minutes: float) -> str:
 def _run_application(skip_browser: bool) -> int:
     """Rulează --aplicatie: pornește serverul local, deschide (sau nu) browserul și așteaptă oprirea.
 
-    Întoarce 0 la oprire normală (Ctrl+C, butonul din pagină, inactivitate) și 1 dacă serverul nu a putut porni.
+    Întoarce 0 la oprire normală (Ctrl+C, butonul din pagină, inactivitate), settings.EXIT_CODE_RESTART după o actualizare
+    instalată din pagină (lansatorul pornește varianta nouă, D12) și 1 dacă serverul nu a putut porni.
     Adresa cu tokenul în ea se scrie doar cu print (ecranul utilizatorului), niciodată prin logger: tokenul nu intră în jurnal.
     """
     logger = logging.getLogger(__name__)
@@ -163,7 +228,94 @@ def _run_application(skip_browser: bool) -> int:
     finally:
         app.close()
     print("\n" + APP_STOP_MESSAGES.get(reason, GENERIC_APP_STOP_MESSAGE))
+    if reason == STOP_UPDATED:
+        logger.info("aplicația s-a oprit după actualizare: ies cu codul %d (repornire)", settings.EXIT_CODE_RESTART)
+        return settings.EXIT_CODE_RESTART
     return 0
+
+
+def _confirm_update(version: str) -> bool:
+    """Cere să scrii exact DA înainte de instalare; orice altceva, EOF sau Ctrl+C înseamnă „nu” (nu se schimbă nimic)."""
+    word = session_cleaner.CONFIRMATION_WORD
+    try:
+        answer = input(f"\nScrie exact {word} (cu majuscule) ca să instalezi versiunea {version}; orice altceva anulează: ")
+    except (EOFError, KeyboardInterrupt, OSError, RuntimeError):
+        print("")
+        return False
+    return answer.strip() == word
+
+
+def _print_update_stage(stage: str) -> None:
+    """Scrie pe ecran etapa actualizării (descarc, verific, instalez); o etapă necunoscută se ignoră."""
+    if stage in UPDATE_STAGE_MESSAGES:
+        print(UPDATE_STAGE_MESSAGES[stage])
+
+
+def _run_update(skip_confirmation: bool) -> int:
+    """Rulează --actualizeaza: caută ultima lansare, arată ce e nou, cere DA, descarcă, verifică amprenta și instalează (D3, D19).
+
+    Descarcă într-un subfolder nou și unic din settings.UPDATE_DOWNLOAD_DIR (update_download.download_folder), șters la final
+    oricum s-ar fi terminat (N9). Întoarce 0 după instalare (programul trebuie pornit din nou), la „ai ultima versiune” și la anulare;
+    1 la orice eroare, cu mesaj în română și fără traceback. Nu repornește nimic: versiunea nouă se încarcă la următoarea pornire.
+    """
+    logger = logging.getLogger(__name__)
+    print(f"Versiunea instalată: {VERSION}. Caut pe GitHub o versiune nouă...")
+    check = check_for_update(enabled=True)
+    if check.status == STATUS_UP_TO_DATE:
+        print(check.message)
+        return 0
+    if check.status != STATUS_NEW or check.release is None:
+        print(f"\nEROARE: {check.message}" + (f"\nPagina lansărilor: {check.page_url}" if check.page_url else ""))
+        return 1
+    published = f", publicată {check.published[:10]}" if check.published else ""
+    print(f"\nVersiune nouă: {check.latest} (ai {check.current}{published}).")
+    if check.notes:
+        print(f"\nCe e nou:\n{check.notes}")
+    if is_git_checkout(settings.PROJECT_ROOT):
+        print(f"\nEROARE: {MESSAGE_GIT_CHECKOUT}")
+        return 1
+    if not skip_confirmation and not _confirm_update(check.latest):
+        print("\nAnulat: nu am schimbat nimic.")
+        return 0
+    try:
+        with download_folder(settings.UPDATE_DOWNLOAD_DIR) as download_dir:
+            archive = download_release(check.release, download_dir, progress=_print_update_stage)
+            result = apply_update(archive, settings.PROJECT_ROOT, check.release.version, progress=_print_update_stage)
+    except UpdateError as error:
+        logger.error("actualizare la %s eșuată: %s", check.latest, error)
+        print(f"\nEROARE: {error}")
+        return 1
+    except KeyboardInterrupt:  # apply_update a revenit deja la versiunea veche înainte să lase Ctrl+C să treacă
+        logger.warning("actualizare la %s oprită cu Ctrl+C", check.latest)
+        print(f"\n{UPDATE_INTERRUPTED_MESSAGE}")
+        return 1
+    logger.info("actualizare: %s → %s (%d fișiere scrise, %d șterse)", result.from_version, result.to_version, result.written, result.deleted)
+    print(f"\nActualizat la {result.to_version}. Pornește din nou programul.")
+    return 0
+
+
+def _report_startup_recovery(outcome: RecoveryOutcome) -> tuple[int | None, Path | None]:
+    """Spune ce a făcut recuperarea de la pornire (N2) și o trece în jurnal; întoarce (cod de ieșire sau None, calea jurnalului sau None).
+
+    Fără nimic de spus și nimic notat: (None, None) și niciun jurnal creat. Altfel jurnalul se configurează acum și primește întâi ce a
+    notat recuperarea înaintea lui (outcome.records, cu ora lor: fișiere blocate, curățenii ratate, P6), apoi rezultatul. După o revenire:
+    mesajul, iar programul continuă cu comanda cerută (modulele s-au importat abia după revenire, deci sunt toate din versiunea veche,
+    întreagă). Dacă revenirea nu s-a putut face: 1.
+    """
+    if outcome.message is None and outcome.error is None and not outcome.records:
+        return None, None
+    log_path = setup_logging(settings.LOGS_DIR)
+    for record in outcome.records:
+        logging.getLogger(record.name).handle(record)
+    logger = logging.getLogger(__name__)
+    if outcome.error is not None:
+        logger.error(LOG_STARTUP_OUTCOME, outcome.error)
+        print(f"\nEROARE: {outcome.error}")
+        return 1, log_path
+    if outcome.message is not None:
+        logger.warning(LOG_STARTUP_OUTCOME, outcome.message)
+        print(f"\n{outcome.message}\n")
+    return None, log_path
 
 
 def _current_log_path() -> Path | None:
@@ -175,13 +327,24 @@ def _current_log_path() -> Path | None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Rulează programul; întoarce 0 la succes."""
+    """Rulează programul; întoarce 0 la succes, 1 la eroare și settings.EXIT_CODE_RESTART când trebuie pornit din nou.
+
+    Întâi spune ce a făcut recuperarea de la import (STARTUP_RECOVERY); dacă ea n-a reușit, iese cu 1 fără să citească opțiunile.
+    """
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    stopped, recovery_log = _report_startup_recovery(STARTUP_RECOVERY)
+    if stopped is not None:
+        return stopped
     args = _parse_args(sys.argv[1:] if argv is None else argv)
-    log_path = setup_logging(settings.LOGS_DIR)
+    if args.versiune:
+        print(f"{PROGRAM_NAME} {VERSION}")
+        return 0
+    log_path = recovery_log or setup_logging(settings.LOGS_DIR)
     if args.sterge_sesiunea:
         return _delete_saved_session(args.fara_confirmare)
+    if args.actualizeaza:
+        return _run_update(args.fara_confirmare)
     if args.aplicatie:
         return _run_application(args.fara_browser)
     try:
