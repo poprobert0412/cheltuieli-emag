@@ -1052,6 +1052,7 @@
       };
       const totals = years.map((y) => series.reduce((a, n) => a + valueOf(y, n), 0));
       let drawnWidth = -1;
+      let hits = []; // coloanele focusabile ale desenului curent, în ordinea anilor
 
       function draw() {
         const avail = chartHost.clientWidth;
@@ -1080,6 +1081,7 @@
         // Etichetele anilor se răresc când nu încap una lângă alta (ultimul an are mereu etichetă);
         // tooltip-ul și aria-label ale fiecărei coloane le au pe toate.
         const yearLabelStep = Math.max(1, Math.ceil((Math.max(...years.map((y) => clip(String(y), 12).length)) * CHART_LABEL_CHAR_PX + 6) / slot));
+        const fresh = [];
         years.forEach((yr, idx) => {
           const cx = L + slot * idx + slot / 2;
           let acc = 0;
@@ -1102,9 +1104,20 @@
             'aria-label': yr + ': ' + lei(totals[idx]) + (rows.length ? ' (' + rows.slice().reverse().map((r) => r.label + ' ' + r.value).join(', ') + ')' : ''),
           });
           attachTip(hit, yr, rows.concat([{ label: 'Total', value: lei(totals[idx]) }]));
+          fresh.push(hit);
           svg.appendChild(hit);
         });
+        // Desenul nou înlocuiește coloanele (primul cadru după mount, apoi orice schimbare de lățime). Coloana cu focus
+        // ar ieși din document: blur închide tooltip-ul și focusul cade pe <body>, deci următorul Tab o ia de la capăt.
+        // Focusul trece pe coloana aceluiași an; tooltip-ul rămâne deschis doar dacă era (Escape îl închisese).
+        const focused = hits.indexOf(chartHost.ownerDocument.activeElement);
+        const tipWasOpen = focused >= 0 && tipTarget === hits[focused];
         chartHost.replaceChildren(svg);
+        hits = fresh;
+        if (focused >= 0) {
+          hits[focused].focus({ preventScroll: true });
+          if (!tipWasOpen) hideTip();
+        }
       }
 
       const tableHost = h('div', { hidden: 'hidden' });

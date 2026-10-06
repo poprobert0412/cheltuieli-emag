@@ -463,6 +463,48 @@ def test_tooltip_survives_the_scroll_that_keyboard_focus_causes(open_page):
     assert inside, "tooltip-ul trebuie să rămână lângă elementul focusat, în ecran"
 
 
+FOCUSED_YEAR = """() => { const e = document.activeElement;
+  return e.isConnected && e.matches('#a svg.ed-chart .ed-hit') ? e.getAttribute('aria-label').split(':')[0] : null; }"""
+
+
+def test_column_focused_before_the_first_frame_keeps_focus_and_tooltip_after_the_redraw(open_page, data):
+    # Primul cadru după mount redesenează graficul la lățimea reală (la mount containerul nu era încă în pagină).
+    # Pe macOS, page.focus a ajuns înaintea acelui cadru: coloana focusată era înlocuită, blur închidea tooltip-ul și
+    # focusul cădea pe <body>. Aici mount și focus sunt în același task: niciun cadru între ele, deci fără noroc la cronometru.
+    year = data["demo"]["by_year_category"]["years"][1]
+    page, probe = open_page(height=500)
+    page.evaluate("""() => { EmagDashboard.mount(document.getElementById('a'), DATA.demo, { demo: true });
+      window.__old = document.querySelectorAll('#a svg.ed-chart .ed-hit')[1]; __old.focus(); }""")
+    settle(page)
+    assert page.evaluate("!__old.isConnected"), "primul cadru trebuie să fi înlocuit coloana (altfel testul nu verifică nimic)"
+    assert page.evaluate("scrollY") > 0 and page.evaluate(FOCUSED_YEAR) == year
+    assert page.is_visible("#a .ed-tip") and page.inner_text("#a .ed-tip-title") == year
+    assert_clean(probe)
+
+
+def test_chart_redrawn_for_a_new_width_keeps_keyboard_focus_and_respects_escape(open_page, data):
+    years = data["demo"]["by_year_category"]["years"]
+    page, probe = open_page(height=500)
+    mount(page)
+    settle(page)
+    page.focus("#a svg.ed-chart .ed-hit >> nth=1")
+    page.keyboard.press("Tab")
+    settle(page)
+    page.evaluate("window.__old = document.activeElement")
+    page.set_viewport_size({"width": 1000, "height": 500})  # fereastră micșorată: graficul se redesenează pe noua lățime
+    settle(page)
+    assert page.evaluate("!__old.isConnected"), "graficul trebuie să se fi redesenat (altfel testul nu verifică nimic)"
+    assert page.evaluate(FOCUSED_YEAR) == years[2] and page.evaluate("document.activeElement.matches(':focus-visible')")
+    assert page.is_visible("#a .ed-tip") and page.inner_text("#a .ed-tip-title") == years[2]
+    page.keyboard.press("Tab")  # Tab continuă de la anul curent, nu de la prima coloană
+    assert page.evaluate(FOCUSED_YEAR) == years[3]
+    page.keyboard.press("Escape")
+    page.set_viewport_size({"width": 1280, "height": 500})
+    settle(page)
+    assert page.evaluate(FOCUSED_YEAR) == years[3] and not page.is_visible("#a .ed-tip")  # redesenarea nu redeschide ce a închis Escape
+    assert_clean(probe)
+
+
 def test_pointer_tooltip_closes_when_the_page_scrolls(open_page):
     page, _ = open_page(height=500)
     mount(page)
