@@ -338,6 +338,8 @@ ALLOWED_WRITE_PERMISSIONS = frozenset({
     ("lansare.yml", "retrage", "contents"),
     ("codeql.yml", "analiza", "security-events"),
 })
+# Eticheta lansării în lansare.yml: cea scrisă în formular la butonul „Run workflow”, altfel cea împinsă.
+RELEASE_TAG = "${{ inputs.eticheta || github.ref_name }}"
 # N13 (decis 6 oct. 2026): jobul din lansare.yml → workflow-ul pe care îl cheamă înainte de publicare.
 RELEASE_GATES = {"teste": "teste.yml", "pornire": "pornire.yml"}
 # N14 (decis 6 oct. 2026): uneltele bash ale testului actualizării și cum le încarcă fiecare pas (din checkout-ul în depozit/).
@@ -386,8 +388,32 @@ def test_release_workflow_checks_first_then_builds_verifies_publishes_and_tests_
     assert -1 not in positions, f"lipsește din jobul «lansare»: {[item for item, at in zip(order, positions) if at == -1]}"
     assert positions == sorted(positions), f"ordinea pașilor din lansare.yml e greșită: {order}"
     update = jobs["actualizare"]
-    assert _needs(update) == ["lansare"] and "uses: ./.github/workflows/actualizare.yml" in update and "eticheta: ${{ github.ref_name }}" in update
+    assert _needs(update) == ["lansare"] and "uses: ./.github/workflows/actualizare.yml" in update and f"eticheta: {RELEASE_TAG}" in update
     assert re.search(r"permissions:\s*\n\s*contents: read", update), "jobul actualizării are doar drept de citire"
+
+
+def test_release_can_also_start_from_the_button_on_main_with_a_new_tag():
+    """lansare.yml: pornită și din „Run workflow” (fără git), cu eticheta scrisă în formular, obligatorie. Peste tot eticheta e
+    cea din formular sau cea împinsă (github.ref_name singur ar fi „main” la buton); la buton, doar de pe main și doar cu o
+    etichetă care nu există, înainte de arhivă; lansarea creează eticheta pe commit-ul testat (--target)."""
+    text = _workflow("lansare.yml")
+    top = _top_level(text)
+    assert re.search(r"(?m)^  push:\n    tags: \[\"v\*\"\]$", top), "lansarea pornește în continuare la o etichetă împinsă"
+    assert re.search(r"(?m)^  workflow_dispatch:\n    inputs:\n      eticheta:\n(?:        .+\n)*?        required: true$", top)
+    body = _without_comments(text)
+    assert body.count("github.ref_name") == body.count(RELEASE_TAG) > 0, "github.ref_name apare doar ca rezervă a etichetei din formular"
+    publish = _jobs(text)["lansare"]
+    guard = publish.find("if: github.event_name == 'workflow_dispatch'")
+    assert -1 < publish.find("release_version.py") < guard < publish.find("release_manifest.py"), "verificarea butonului, înainte de arhivă"
+    assert 'if [ "$GITHUB_REF" != refs/heads/main ]' in publish and 'git ls-remote --exit-code --tags origin "refs/tags/$ETICHETA"' in publish
+    assert '--target "$GITHUB_SHA"' in publish
+
+
+@pytest.mark.parametrize("name", sorted(RELEASE_GATES.values()))
+def test_release_gates_from_the_button_are_not_cancelled_by_a_push_on_main(name):
+    """La buton, testele chemate rulează pe refs/heads/main, ca un push pe main: grupul de concurență ține cont de eveniment."""
+    group = re.search(r"(?m)^  group:[ \t]*(.+)$", _top_level(_workflow(name)))
+    assert group and "github.event_name" in group.group(1) and "github.ref" in group.group(1), f"{name}: {group}"
 
 
 @pytest.mark.parametrize("name", sorted(RELEASE_GATES.values()))

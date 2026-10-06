@@ -11,11 +11,19 @@
 # Dacă el nu reușește (pică sau e oprit), jobul „retrage” marchează lansarea ca prerelease: releases/latest, de unde aplicația
 # află de versiunile noi, n-o mai oferă utilizatorilor (N13).
 # Drepturi: contents: write doar la jobul care creează lansarea și la cel care o retrage; restul, doar citire.
+# Fără git pe calculator: Actions → Lansare → Run workflow (pe main), cu eticheta scrisă în formular. Totul se face la fel, pe
+# commit-ul lui main; eticheta trebuie să fie exact "v" + VERSION și să nu existe deja, iar lansarea o creează pe acel commit.
 name: Lansare
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      eticheta:
+        description: "Eticheta lansării: exact v + VERSION din emag_spend/version.py (ex. v1.0.0)"
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -48,16 +56,37 @@ jobs:
 
       - name: Verifică eticheta, versiunea și CHANGELOG-ul
         env:
-          ETICHETA: ${{ github.ref_name }}
+          ETICHETA: ${{ inputs.eticheta || github.ref_name }}
         run: |
           VERSIUNE=$(python3 .github/scripts/release_version.py "$ETICHETA")
           python3 .github/scripts/changelog_section.py "$VERSIUNE"
           echo "VERSIUNE=$VERSIUNE" >> "$GITHUB_ENV"
 
+      # Pornită din buton: doar de pe main, iar eticheta e nouă (altfel lansarea s-ar lega de commit-ul vechi al etichetei,
+      # nu de cel testat și arhivat aici). ls-remote: 0 = există, 2 = nu există, altceva = eroare (nu se publică nimic).
+      - name: Pornită din buton - doar de pe main, cu o etichetă nouă
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          ETICHETA: ${{ inputs.eticheta || github.ref_name }}
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Lansarea din buton pornește doar de pe main, nu de pe $GITHUB_REF."
+            exit 1
+          fi
+          cod=0
+          git ls-remote --exit-code --tags origin "refs/tags/$ETICHETA" > /dev/null || cod=$?
+          if [ "$cod" = 0 ]; then
+            echo "::error::Eticheta $ETICHETA există deja. O versiune nouă are nevoie de alt număr (VERSION și CHANGELOG.md)."
+            exit 1
+          elif [ "$cod" != 2 ]; then
+            echo "::error::Nu am putut verifica dacă eticheta $ETICHETA există (git ls-remote a ieșit cu $cod)."
+            exit 1
+          fi
+
       # --prefix de dinainte de --add-file pune manifestul în instalare/, cel de după îl pune pe restul arhivei.
       - name: Face manifestul, arhiva și amprentele
         env:
-          ETICHETA: ${{ github.ref_name }}
+          ETICHETA: ${{ inputs.eticheta || github.ref_name }}
         run: |
           NUME="cheltuieli-emag-$ETICHETA"
           python3 .github/scripts/release_manifest.py --ref HEAD "$RUNNER_TEMP/fisiere.txt"
@@ -69,11 +98,13 @@ jobs:
       - name: Creează lansarea
         env:
           GH_TOKEN: ${{ github.token }}
-          ETICHETA: ${{ github.ref_name }}
+          ETICHETA: ${{ inputs.eticheta || github.ref_name }}
         run: |
           NUME="cheltuieli-emag-$ETICHETA"
           python3 .github/scripts/release_body.py --versiune "$VERSIUNE" --depozit "$GITHUB_REPOSITORY" --amprente SHA256SUMS.txt > note.md
-          gh release create "$ETICHETA" "$NUME.zip" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --title "Cheltuieli eMAG $ETICHETA" --notes-file note.md
+          # --target: la buton, eticheta nu există încă și GitHub o creează pe commit-ul testat; la o etichetă împinsă e ignorat.
+          gh release create "$ETICHETA" "$NUME.zip" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Cheltuieli eMAG $ETICHETA" --notes-file note.md
 
   actualizare:
     name: testul actualizării
@@ -82,7 +113,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/actualizare.yml
     with:
-      eticheta: ${{ github.ref_name }}
+      eticheta: ${{ inputs.eticheta || github.ref_name }}
 
   retrage:
     name: retrage lansarea dacă testul actualizării nu reușește
@@ -97,7 +128,7 @@ jobs:
       - name: Marchează lansarea ca prerelease, ca aplicația să n-o mai ofere
         env:
           GH_TOKEN: ${{ github.token }}
-          ETICHETA: ${{ github.ref_name }}
+          ETICHETA: ${{ inputs.eticheta || github.ref_name }}
         run: |
           gh release edit "$ETICHETA" --repo "$GITHUB_REPOSITORY" --prerelease
           # releases/latest e chiar adresa din care aplicația află de versiunile noi; fără altă lansare publicată răspunde 404.

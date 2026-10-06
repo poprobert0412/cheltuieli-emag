@@ -15,9 +15,10 @@ permissions:
   contents: read
 
 # Numele grupului e scris aici, nu luat din github.workflow: chemat din lansare.yml, github.workflow ar fi „Lansare” și
-# pentru pornire.yml, deci cele două ar cădea în același grup și unul l-ar anula pe celălalt.
+# pentru pornire.yml, deci cele două ar cădea în același grup și unul l-ar anula pe celălalt. Evenimentul ține separată
+# lansarea din buton (workflow_dispatch pe main) de un push pe main, care altfel i-ar anula testele.
 concurrency:
-  group: teste-${{ github.ref }}
+  group: teste-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
