@@ -8,7 +8,7 @@ Ce s-a schimbat în fiecare versiune a programului Cheltuieli eMAG, cea mai nou�
 
 Reparații.
 
-- Aplicația locală nu mai rămâne uneori la „Se verifică aplicația…” pe Windows: acum primește deodată toate fișierele paginii, iar dacă totuși unul nu se încarcă, restul paginii pornește.
+- Aplicația locală nu mai rămâne uneori la „Se verifică aplicația…” pe Windows: acum primește deodată toate fișierele paginii. În plus, dacă nu se încarcă o parte care nu ține de pornire (de exemplu întrebările frecvente sau istoricul), restul paginii pornește.
 - În raport, coloana aleasă cu tastatura în graficul pe ani rămâne aleasă, cu explicația deschisă, când fereastra își schimbă mărimea sau când faci zoom.
 - Documentația: fiecare decizie la care trimite codul are acum rândul ei în docs/DECIZII.md.
 - La actualizare, rapoartele tale și sesiunea eMAG rămân neatinse, iar regulile din config/categorii.personal.json rămân; modificările făcute direct în config/categorii.json se pierd la actualizare.
