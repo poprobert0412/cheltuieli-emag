@@ -148,6 +148,7 @@ identica_cu_ultima() {
   local copie=$1 dosar cale
   dosar=$(dosar_copiei "$copie")
   while IFS= read -r cale; do
+    # shellcheck disable=SC2153 # ETICHETA vine din GITHUB_ENV (pasul anterior al workflow-ului), nu e o greșeală de scriere
     cmp -s "referinta/$NUME/$cale" "$dosar/$cale" || { echo "::error::$copie: $cale diferă de lansarea $ETICHETA"; return 1; }
   done < "referinta/$NUME/instalare/fisiere.txt"
   LC_ALL=C sort "$copie/manifest-vechi.txt" > "$copie/manifest-vechi.sortat"
@@ -206,8 +207,9 @@ adresa() {
 }
 
 port_din() {
-  # Portul din adresa aplicației $1.
-  echo "$1" | sed 's#http://127.0.0.1:\([0-9]*\)/.*#\1#'
+  # Portul din adresa aplicației $1 (http://127.0.0.1:<port>/…), fără sed.
+  local rest=${1#http://127.0.0.1:}
+  echo "${rest%%/*}"
 }
 
 camp_json() {

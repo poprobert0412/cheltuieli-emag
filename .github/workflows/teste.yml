@@ -52,5 +52,11 @@ jobs:
         run: "python -m pip install --disable-pip-version-check --no-cache-dir --only-binary=:all: -r requirements-dev.txt"
 
       # -rs: testele sărite apar cu motiv în jurnal (ex. un browser care lipsește), ca să nu treacă neobservate.
+      # Raportul JUnit stă în folderul temporar al mașinii, nu în proiect; din el se fac adnotările de mai jos.
       - name: Rulează testele
-        run: python -m pytest -q -rs
+        run: python -m pytest -q -rs --junitxml="${{ runner.temp }}/pytest.xml"
+
+      # Jurnalele complete cer cont GitHub; adnotările se văd pe pagina rulării de oricine, deci și numele testelor picate.
+      - name: Testele picate, ca adnotări
+        if: failure()
+        run: python .github/scripts/adnotari_pytest.py "${{ runner.temp }}/pytest.xml"

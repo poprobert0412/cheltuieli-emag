@@ -665,3 +665,36 @@ def test_ci_terminal_update_retries_only_while_nothing_changed_and_checks_the_re
     made = (tmp_path / "copie-a" / "apeluri.txt").read_text(encoding="utf-8").splitlines()
     assert len(made) == calls, f"apeluri: {made}, așteptat {calls}\n{out}\n{err}"
     assert (result.returncode == 0) == succeeds, f"cod {result.returncode}\n{out}\n{err}"
+
+
+# ---------- adnotările testelor picate (jurnalele GitHub cer cont; adnotările nu) ----------
+
+def _junit(cases: str) -> str:
+    """Un raport JUnit minim, ca cel scris de pytest --junitxml."""
+    return f'<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest">{cases}</testsuite></testsuites>'
+
+
+def test_failed_tests_become_annotations_with_escaped_title_and_message(tmp_path):
+    """Doar testele picate sau cu eroare devin `::error`, cu titlul (clasă::test) și mesajul codate cum cere GitHub."""
+    script = _load("adnotari_pytest")
+    report = tmp_path / "pytest.xml"
+    report.write_text(_junit(
+        '<testcase classname="tests.test_a" name="test_trece"/>'
+        '<testcase classname="tests.test_a" name="test_pica[x,y]"><failure message="assert 1 == 2">linia 1\nAssertionError: 50%</failure></testcase>'
+        '<testcase classname="tests.test_b" name="test_eroare"><error message="fixture lipsă"/></testcase>'), encoding="utf-8")
+    lines = script.annotations(report)
+    assert len(lines) == 2, lines
+    assert lines[0].startswith("::error title=tests.test_a%3A%3Atest_pica[x%2Cy]::assert 1 == 2%0A")
+    assert "50%25" in lines[0] and "\n" not in lines[0]
+    assert lines[1].startswith("::error title=tests.test_b%3A%3Atest_eroare::fixture lipsă")
+
+
+def test_annotations_are_capped_and_a_missing_report_is_said_once(tmp_path):
+    """Cel mult MAX_ANNOTATIONS adnotări; fără raport, o singură adnotare care spune asta."""
+    script = _load("adnotari_pytest")
+    report = tmp_path / "pytest.xml"
+    report.write_text(_junit("".join(f'<testcase classname="t" name="n{i}"><failure message="m{i}"/></testcase>' for i in range(25))),
+                      encoding="utf-8")
+    assert len(script.annotations(report)) == script.MAX_ANNOTATIONS
+    missing = script.annotations(tmp_path / "lipsa.xml")
+    assert len(missing) == 1 and missing[0].startswith("::error::pytest nu a scris raportul")

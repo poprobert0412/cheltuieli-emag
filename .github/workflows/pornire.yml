@@ -76,9 +76,10 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
           export PYTHONUTF8=1
           "$PY" ruleaza.py --aplicatie --fara-browser > server.log 2>&1 &
-          for i in $(seq 1 60); do URL=$(grep -o 'http://127\.0\.0\.1:[0-9]*/aplicatie\.html#t=[A-Za-z0-9_-]*' server.log | head -1); [ -n "$URL" ] && break; sleep 1; done
+          # „|| true”: cu pipefail (implicit pe GitHub), grep fără potrivire cât jurnalul e încă gol ar opri pasul la prima trecere.
+          for _ in $(seq 1 60); do URL=$(grep -o 'http://127\.0\.0\.1:[0-9]*/aplicatie\.html#t=[A-Za-z0-9_-]*' server.log | head -1 || true); [ -n "$URL" ] && break; sleep 1; done
           [ -n "$URL" ] || { cat server.log; exit 1; }
-          PORT=$(echo "$URL" | sed 's#http://127.0.0.1:\([0-9]*\)/.*#\1#'); TOKEN=${URL##*#t=}
+          REST=${URL#http://127.0.0.1:}; PORT=${REST%%/*}; TOKEN=${URL##*#t=}
           test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/aplicatie.html")" = 200
           test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/api/hello")" = 401
           curl -sf -H "X-App-Token: $TOKEN" "http://127.0.0.1:$PORT/api/hello" | grep -q cheltuieli-emag
