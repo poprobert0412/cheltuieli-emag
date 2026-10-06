@@ -141,6 +141,10 @@ class _LocalHTTPServer(ThreadingHTTPServer):
 
     allow_reuse_address = False
     daemon_threads = True
+    # Coada de conexiuni în așteptare (implicit 5 în socketserver). Pagina cere ~20 de fișiere, fiecare pe o conexiune nouă
+    # (HTTP/1.0); pe Windows o conexiune care găsește coada plină e refuzată pe loc, iar Edge/Chrome recente nu mai reîncearcă
+    # pe 127.0.0.1, deci un script lipsea și pagina rămânea la „Se verifică aplicația…”. Cu loc pentru toate, nu se mai refuză.
+    request_queue_size = 64
     app: "AppServer"
 
     def server_bind(self) -> None:

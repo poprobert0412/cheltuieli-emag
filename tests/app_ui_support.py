@@ -66,10 +66,16 @@ BROWSER_BLOCKED_PORTS = frozenset({
 MAX_BIND_ATTEMPTS = 100  # de câte ori cerem un port nou până dăm de unul acceptat de browsere (aproape niciodată mai mult de 1–2)
 
 
+class _QueuedHTTPServer(ThreadingHTTPServer):
+    """Ca serverul real (app_server._LocalHTTPServer): loc în coadă pentru toate fișierele paginii, cerute deodată de browser."""
+
+    request_queue_size = 64
+
+
 def _bind_to_a_port_browsers_accept(handler) -> ThreadingHTTPServer:
     """Pornește un ThreadingHTTPServer pe 127.0.0.1, cu port ales de sistem, repetând cât timp portul e unul blocat de browsere."""
     for _ in range(MAX_BIND_ATTEMPTS):
-        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        server = _QueuedHTTPServer(("127.0.0.1", 0), handler)
         if server.server_address[1] not in BROWSER_BLOCKED_PORTS:
             return server
         server.server_close()

@@ -4,6 +4,15 @@ Ce s-a schimbat în fiecare versiune a programului Cheltuieli eMAG, cea mai nou�
 `## X.Y.Z — AAAA-LL-ZZ`, scrisă înainte de lansare: textul ei apare în pagina lansării de pe GitHub și în aplicație, la
 „Ce e nou”, ca text simplu (fără formatare), deci rândurile ei sunt fraze scurte, fără titluri `##`.
 
+## 1.0.1 — 2026-10-06
+
+Reparații.
+
+- Aplicația locală nu mai rămâne uneori la „Se verifică aplicația…” pe Windows: acum primește deodată toate fișierele paginii, iar dacă totuși unul nu se încarcă, restul paginii pornește.
+- În raport, coloana aleasă cu tastatura în graficul pe ani rămâne aleasă, cu explicația deschisă, când fereastra își schimbă mărimea sau când faci zoom.
+- Documentația: fiecare decizie la care trimite codul are acum rândul ei în docs/DECIZII.md.
+- La actualizare, rapoartele tale și sesiunea eMAG rămân neatinse, iar regulile din config/categorii.personal.json rămân; modificările făcute direct în config/categorii.json se pierd la actualizare.
+
 ## 1.0.0 — 2026-10-05
 
 Prima versiune numerotată.

@@ -9,28 +9,32 @@
 
   const App = root.App;
 
-  /** Rulează `init` și, dacă aruncă, scrie numele modulului în consolă fără să oprească celelalte module. */
-  function safely(name, init) {
+  /**
+   * Rulează `start` și, dacă aruncă, scrie numele modulului în consolă fără să oprească celelalte module. App.<modul> se
+   * caută abia în `start`, deci în interiorul lui try: un script care nu s-a încărcat (de exemplu o conexiune refuzată pe
+   * Windows) lasă App.<modul> nedefinit, iar TypeError-ul e prins aici, nu oprește restul pornirii.
+   */
+  function safely(name, start) {
     try {
-      init();
+      start();
     } catch (error) {
       if (root.console && root.console.error) root.console.error('Cheltuieli eMAG: modulul ' + name + ' nu a pornit', error);
     }
   }
 
   function boot() {
-    safely('screens', App.screens.init);
-    safely('threshold', App.threshold.init);
-    safely('start', App.start.init);
-    safely('run', App.run.init);
-    safely('history', App.history.init);
-    safely('session', App.session.init);
-    safely('download', App.download.init);
-    safely('report', App.report.init);
-    safely('update', App.update.init);
-    safely('faq', App.faq.init);
-    safely('lifecycle', App.lifecycle.init);
-    safely('pornire', App.lifecycle.start);
+    safely('screens', function () { App.screens.init(); });
+    safely('threshold', function () { App.threshold.init(); });
+    safely('start', function () { App.start.init(); });
+    safely('run', function () { App.run.init(); });
+    safely('history', function () { App.history.init(); });
+    safely('session', function () { App.session.init(); });
+    safely('download', function () { App.download.init(); });
+    safely('report', function () { App.report.init(); });
+    safely('update', function () { App.update.init(); });
+    safely('faq', function () { App.faq.init(); });
+    safely('lifecycle', function () { App.lifecycle.init(); });
+    safely('pornire', function () { App.lifecycle.start(); });
   }
 
   if (root.document.readyState === 'loading') root.document.addEventListener('DOMContentLoaded', boot);

@@ -26,6 +26,24 @@ STEP_STATUSES_JS = "() => [...document.querySelectorAll('#steps .step')].map((e)
 STEP_STATUS_TEXTS_JS = "() => [...document.querySelectorAll('#steps .step__status')].map((e) => e.textContent)"
 
 
+@pytest.mark.parametrize("module", ["faq", "download", "history", "update"])
+def test_a_module_whose_script_does_not_load_does_not_stop_the_page(browser, fake, module):
+    """Un app-*.js care nu se încarcă (pe Windows: conexiune refuzată) nu ține pagina la „Se verifică aplicația…”: ceilalți pornesc,
+    pagina ajunge la un ecran, iar consola numește modulul căzut."""
+    context = browser.new_context()
+    try:
+        context.route(f"**/assets/app-{module}.js", lambda route: route.abort())
+        page = context.new_page()
+        errors = []
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.goto(fake.page_url())
+        page.wait_for_selector("html[data-current-screen]:not([data-current-screen='loading'])", state="attached")
+        assert current_screen(page) == "ready"
+        assert any(f"modulul {module} nu a pornit" in text for text in errors), errors
+    finally:
+        context.close()
+
+
 def start_run(page, fake, mode="real"):
     """Apasă butonul potrivit și așteaptă ecranul „în lucru”; întoarce numărul rulării pornite."""
     page.click("#btn-start" if mode == "real" else "#btn-demo")
