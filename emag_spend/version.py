@@ -8,7 +8,7 @@ lui update_check.py și update_apply.py).
 
 import re
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 # Cifre ASCII explicite ([0-9], nu \d, care acceptă și cifre din alte alfabete) și fără zerouri în față (ca la semver:
 # „01.2.3” nu e o versiune). Plafonul de cifre oprește numere uriașe venite dintr-un răspuns străin: versiunile reale

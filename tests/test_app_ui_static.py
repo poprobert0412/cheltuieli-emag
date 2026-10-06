@@ -165,6 +165,16 @@ def test_script_order_matches_the_modules_on_disk():
     assert on_disk == {s for s in order if s.startswith("assets/app-")}
 
 
+def test_every_module_is_looked_up_inside_the_try_that_isolates_it():
+    """app-main.js pornește fiecare modul printr-o funcție, deci App.<modul> se caută în try-ul din safely(): un script care nu
+    s-a încărcat lasă App.<modul> nedefinit, iar TypeError-ul nu oprește restul pornirii (ca la site.js)."""
+    source = (ASSETS_DIR / "app-main.js").read_text(encoding="utf-8")
+    assert not re.search(r"safely\('[a-z]+',\s*App\.", source), "App.<modul> evaluat înaintea lui try"
+    started = re.findall(r"safely\('([a-z]+)', function \(\) \{ App\.([a-z]+)\.(init|start)\(\); \}\);", source)
+    modules = {path.name[len("app-"):-len(".js")] for path in APP_JS_FILES} - {"main", "dom", "api", "state", "poll", "format", "theme"}
+    assert {module for _, module, _ in started} == modules, f"module pornite: {started}"
+
+
 def test_ids_are_unique_and_every_reference_resolves():
     """Nicio id dublă; for, aria-labelledby, aria-controls, aria-describedby și linkurile #... duc la un element existent."""
     ids = [e.attrs["id"] for e in PAGE.elements if "id" in e.attrs]

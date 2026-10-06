@@ -35,6 +35,27 @@ def test_the_server_listens_only_on_loopback_on_a_system_chosen_port(app):
     assert app_server.ANY_FREE_PORT == 0 and app_server.LOOPBACK_HOST == "127.0.0.1"
 
 
+# Mai multe conexiuni decât cere pagina deodată (~20 de fișiere), toate deschise fără ca serverul să accepte vreuna.
+QUEUED_CONNECTIONS = 30
+
+
+def test_the_server_queues_every_connection_the_page_opens_at_once():
+    """Coada de conexiuni (listen) are loc pentru toate fișierele paginii cerute deodată. Cu coada implicită de 5, pe Windows
+    o conexiune în plus era refuzată pe loc, iar Edge/Chrome recente nu reîncearcă pe 127.0.0.1: un script lipsea și pagina
+    rămânea la „Se verifică aplicația…”. Aici nimeni nu acceptă conexiunile, deci fiecare trebuie să încapă în coadă."""
+    server = app_server._LocalHTTPServer((app_server.LOOPBACK_HOST, app_server.ANY_FREE_PORT), app_server._Handler)
+    opened = []
+    try:
+        port = server.server_address[1]
+        for _ in range(QUEUED_CONNECTIONS):
+            opened.append(socket.create_connection((app_server.LOOPBACK_HOST, port), timeout=WAIT_SECONDS))
+    finally:
+        for connection in opened:
+            connection.close()
+        server.server_close()
+    assert len(opened) == QUEUED_CONNECTIONS
+
+
 def test_two_servers_get_different_ports(tmp_path):
     """Portul nu e fix: două servere pornite în același timp primesc porturi diferite (un port cunoscut ar fi o țintă pentru pagini străine)."""
     with running_app(tmp_path) as first, running_app(tmp_path) as second:
