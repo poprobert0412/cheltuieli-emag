@@ -82,7 +82,7 @@ Din Terminal, în folderul programului: `./porneste.sh` (dacă primești „Perm
 
 ### Cum citești raportul
 
-Raportul (`raport.html`) e un singur fișier care se deschide fără internet. De sus în jos: **cât ai cheltuit** (cifra mare: banii plătiți efectiv, după reduceri și vouchere, cu transportul și taxele, minus banii primiți înapoi la retururi), **lanțul de la comandat la plătit**, **pe ce s-au dus banii** (categorii), **pe ani**, **vânzători**, **produsele cu cea mai mare valoare**, **achiziții peste prag**, **prețuri la același produs**, **rămase în afara calculului**, **cifre de control** și **avertismente** (grupe care se deschid, fiecare cu explicația, efectul asupra cifrelor și linkuri spre comenzi). Cum se calculează fiecare cifră: în [README](CALCUL.md) și în nota de metodă de la finalul raportului.
+Raportul (`raport.html`) e un singur fișier care se deschide fără internet. De sus în jos: **cât ai cheltuit** (cifra mare: banii plătiți efectiv, după reduceri și vouchere, cu transportul și taxele, minus banii primiți înapoi la retururi), **lanțul de la comandat la plătit**, **pe ce s-au dus banii** (categorii), **pe ani**, **vânzători**, **produsele cu cea mai mare valoare**, **achiziții peste prag**, **prețuri la același produs**, **rămase în afara calculului**, **cifre de control** și **avertismente** (grupe care se deschid, fiecare cu explicația, efectul asupra cifrelor și linkuri spre comenzi). Cum se calculează fiecare cifră: în [Cum se calculează](CALCUL.md) și în nota de metodă de la finalul raportului.
 
 Dacă deschizi `produse.csv` în Excel și caracterele arată ciudat, folosește **Date → From Text/CSV** și alege UTF-8; separatorul este `;`.
 

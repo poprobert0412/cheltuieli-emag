@@ -1,6 +1,6 @@
 # Decizii deja luate
 
-Lista deciziilor autorului, cu data. Auditurile și propunerile noi nu le redeschid fără un motiv nou (de exemplu, eMAG își schimbă paginile). Lângă codul afectat există un comentariu cu aceeași dată.
+Lista deciziilor autorului, cu data. Auditurile și propunerile noi nu le redeschid fără un motiv nou (de exemplu, eMAG își schimbă paginile). Coloana „Unde” arată fișierele afectate; la o parte din ele, un comentariu din cod trimite la decizie cu aceeași dată.
 
 | Data | Decizia | Unde |
 |---|---|---|

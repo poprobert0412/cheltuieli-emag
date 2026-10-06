@@ -631,6 +631,28 @@ def test_ci_waits_until_the_new_release_is_the_latest(tmp_path, expected_tag, su
         assert result.returncode != 0 and "::error::" in err, f"{out}\n{err}"
 
 
+@needs_bash
+@pytest.mark.parametrize("field, expected", [("check.status", "noua"), ("version", "1.0.0"), ("check.lipsa", ""), ("version.x", "")])
+def test_ci_reads_a_json_field_exactly(tmp_path, field, expected):
+    """camp_json: câmpul cerut din JSON, citit cu Python-ul dat; gol dacă lipsește."""
+    (tmp_path / "raspuns.json").write_bytes(b'{"check": {"status": "noua"}, "version": "1.0.0"}')
+    python = '$(cygpath -u "$PY")' if sys.platform == "win32" else "$PY"
+    result = _run_ci_tools(tmp_path, f'printf "[%s]" "$(camp_json "{python}" {field} < raspuns.json)"', PY=sys.executable)
+    out, err = _text_of(result)
+    assert result.returncode == 0 and out == f"[{expected}]", f"cod {result.returncode}, «{out}»\n{err}"
+
+
+@needs_bash
+def test_ci_json_field_has_no_carriage_return_from_a_windows_python(tmp_path):
+    """camp_json: pe Windows print() scrie „noua\\r\\n”, iar $(...) din Git Bash taie doar LF; câmpul trebuie să rămână „noua”,
+    altfel calea (b) așteaptă degeaba și testul actualizării retrage lansarea."""
+    (tmp_path / "python_windows").write_bytes(b"#!/bin/sh\ncat > /dev/null\nprintf 'noua\\r\\n'\n")
+    (tmp_path / "python_windows").chmod(0o755)
+    result = _run_ci_tools(tmp_path, 'stare=$(echo "{}" | camp_json ./python_windows check.status)\n[ "$stare" = noua ] || { printf "[%s]" "$stare" | od -c; exit 1; }')
+    out, err = _text_of(result)
+    assert result.returncode == 0, f"{out}\n{err}"
+
+
 def _ci_release(folder: Path, name: str) -> None:
     """lansare/<name>.zip: un program inventat cu forma unei lansări (prefix, version.py, manifest, exemplul de reguli)."""
     files = {"emag_spend/version.py": f'VERSION = "{CI_VERSION}"\n', "ruleaza.py": "# program inventat\n", "docs/ghid.md": "ghid\n",

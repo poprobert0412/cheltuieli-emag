@@ -213,8 +213,9 @@ port_din() {
 }
 
 camp_json() {
-  # Câmpul $2 (cale cu puncte, ex. check.status) din JSON-ul de pe stdin, citit cu Python-ul $1; gol dacă lipsește.
-  "$1" -c "import functools, json, sys; v = functools.reduce(lambda d, k: d.get(k) if isinstance(d, dict) else None, sys.argv[1].split('.'), json.load(sys.stdin)); print('' if v is None else v)" "$2"
+  # Câmpul $2 (cale cu puncte, ex. check.status) din JSON-ul de pe stdin, citit cu Python-ul $1; gol dacă lipsește. Fără CR:
+  # pe Windows print() încheie rândul cu CRLF, iar $(...) din Git Bash taie doar LF („noua\r” nu e „noua”).
+  "$1" -c "import functools, json, sys; v = functools.reduce(lambda d, k: d.get(k) if isinstance(d, dict) else None, sys.argv[1].split('.'), json.load(sys.stdin)); print('' if v is None else v)" "$2" | tr -d '\r'
 }
 
 opreste_aplicatia() {
