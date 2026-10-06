@@ -299,10 +299,15 @@ def test_back_to_the_empty_address_clears_the_annotation(open_site):
     for slug in ("cifra", "lant", "cifre"):
         page.click(f".rail__item[data-slug={slug}]")
         page.wait_for_timeout(120)
-    for _ in range(3):
+    # Fiecare „Înapoi” se așteaptă până ajunge adresa la pasul anterior, nu cu pauză fixă (pe macOS, în CI, 450 ms nu ajungeau).
+    for expected in ("#raport-demo/lant", "#raport-demo/cifra"):
         page.evaluate("history.back()")
-        page.wait_for_timeout(450)
-    assert page.evaluate("location.hash") in ("", "#")
+        page.wait_for_function("(h) => location.hash === h", arg=expected, timeout=5000)
+    page.evaluate("history.back()")
+    # Ultimul pas ajunge la adresa fără adnotare. Urmărirea derulării (site-nav.js) poate scrie apoi în ea secțiunea în care se
+    # află pagina (#raport-demo), dacă browserul nu a readus încă pagina sus: tot adresă fără adnotare, deci acceptată.
+    page.wait_for_function("() => !location.hash.startsWith('#raport-demo/')", timeout=5000)
+    assert page.evaluate("location.hash") in ("", "#", "#raport-demo")
     assert page.evaluate("document.querySelector('.rail__item[aria-pressed=true]')") is None
     assert page.evaluate("document.querySelector('.win__mark').hidden") is True
 
