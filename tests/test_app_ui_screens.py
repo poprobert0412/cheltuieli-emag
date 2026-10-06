@@ -239,7 +239,9 @@ def test_cancel_button_label_while_the_request_is_in_flight(open_page, fake):
     start_run(page, fake)
     fake.set_state(state="fetching_orders")
     page.click("#btn-cancel")
-    page.click("#btn-cancel", force=True)
+    # Al doilea clic direct pe element: un clic Playwright (chiar forțat) pică dacă pagina a trecut deja la „oprită” și butonul
+    # s-a ascuns (cursă văzută sub încărcare, în CI); handler-ul trebuie să ignore clicul oricum, vizibil sau nu.
+    page.evaluate("document.getElementById('btn-cancel').click()")
     wait_screen(page, "cancelled")
     assert fake.cancel_requests == 1
 

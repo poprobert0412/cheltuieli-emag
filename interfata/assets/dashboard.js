@@ -1004,8 +1004,8 @@
       return block('categories', 'Pe ce s-au dus banii',
         h('div', { class: 'ed-sec-head' }, heading('Pe ce s-au dus banii'), button),
         P
-          ? h('p', { class: 'ed-caption' }, 'Banii plătiți pe produsele păstrate, pe categorii, după reduceri: fiecare produs primește partea lui din voucherele și reducerile comenzii, proporțional cu prețul. Rândurile care nu sunt produse stau separat, ca toate rândurile să se adune exact la cât ai cheltuit. Regulile tale de categorii le pui în ', h('code', { translate: 'no' }, 'config/categorii.personal.json'), ', pe care actualizarea îl păstrează.')
-          : h('p', { class: 'ed-caption' }, 'Valoarea produselor păstrate (livrate sau ridicate și nereturnate), pe categorii. Regulile tale de categorii le pui în ', h('code', { translate: 'no' }, 'config/categorii.personal.json'), ', pe care actualizarea îl păstrează.'),
+          ? h('p', { class: 'ed-caption' }, 'Banii plătiți pe produsele păstrate, pe categorii, după reduceri: fiecare produs primește partea lui din voucherele și reducerile comenzii, proporțional cu prețul. Rândurile care nu sunt produse stau separat, ca toate rândurile să se adune exact la cât ai cheltuit. Regulile tale de categorii le pui în ', h('code', { class: 'ed-path', translate: 'no' }, 'config/categorii.personal.json'), ', pe care actualizarea îl păstrează.')
+          : h('p', { class: 'ed-caption' }, 'Valoarea produselor păstrate (livrate sau ridicate și nereturnate), pe categorii. Regulile tale de categorii le pui în ', h('code', { class: 'ed-path', translate: 'no' }, 'config/categorii.personal.json'), ', pe care actualizarea îl păstrează.'),
         h('div', { class: 'ed-card' }, barsHost, tableHost));
     }
 
@@ -1511,7 +1511,7 @@
         const more = D.uncategorized_count > shown.length ? ' (primele ' + int(shown.length) + ')' : '';
         stack.appendChild(h('details', null,
           h('summary', null, count(D.uncategorized_count, 'produs necategorizat', 'produse necategorizate') + more),
-          h('p', { class: 'ed-caption ed-after-summary' }, 'Adaugă reguli în ', h('code', { translate: 'no' }, 'config/categorii.personal.json'), ' și refă raportul cu ', h('code', { translate: 'no' }, '--din-cache'), '.'),
+          h('p', { class: 'ed-caption ed-after-summary' }, 'Adaugă reguli în ', h('code', { class: 'ed-path', translate: 'no' }, 'config/categorii.personal.json'), ' și refă raportul cu ', h('code', { translate: 'no' }, '--din-cache'), '.'),
           tableWrap('Produse necategorizate', buildTable('Produse necategorizate',
             [{ label: 'Produs', name: true }, { label: 'Buc', num: true }, { label: 'Valoare', num: true }],
             shown.map((u) => [productLink(u.name, u.order_id, u.order_count, demoMode), int(u.units), lei(u.bani)]), null, true))));

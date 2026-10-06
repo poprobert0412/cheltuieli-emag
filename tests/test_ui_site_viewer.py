@@ -94,7 +94,7 @@ def test_the_drawing_message_is_in_the_polite_live_region(open_site):
 def test_simulator_counts_big_products_without_a_wrong_plural(open_site):
     page, _ = open_site()
     page.click("#sim-threshold")
-    page.keyboard.press("Control+A")
+    page.keyboard.press("ControlOrMeta+A")  # pe macOS „selectează tot” e Cmd+A
     page.keyboard.type("1000")
     page.keyboard.press("Tab")
     page.wait_for_timeout(SETTLE_MS)

@@ -112,7 +112,7 @@ def _tabs_until(page, text, limit=150):
 def _type_into(page, selector, text):
     """Scrie `text` în câmp ca un om (selectează tot, tastează): declanșează input, iar la Tab și change."""
     page.click(selector)
-    page.keyboard.press("Control+A")
+    page.keyboard.press("ControlOrMeta+A")  # pe macOS „selectează tot” e Cmd+A
     page.keyboard.type(text)
 
 

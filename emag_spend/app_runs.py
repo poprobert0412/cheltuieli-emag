@@ -55,6 +55,15 @@ def _is_link_like(path: Path) -> bool:
     return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT)
 
 
+def _has_exact_entry(folder: Path, name: str) -> bool:
+    """True dacă `folder` conține o intrare cu exact numele `name` (aceleași litere mari și mici); False la orice eroare."""
+    try:
+        with os.scandir(folder) as scanner:
+            return any(entry.name == name for entry in scanner)
+    except OSError:
+        return False
+
+
 def _plain_int(value: object) -> int | None:
     """`value` dacă e un număr întreg (nu bool, nu zecimal), altfel None."""
     return value if isinstance(value, int) and not isinstance(value, bool) else None
@@ -90,6 +99,10 @@ class RunsStore:
         except (OSError, RuntimeError):
             return None
         if resolved.parent != base or resolved.name != run_id:
+            return None
+        # Pe un disc care nu deosebește literele mari de mici (Windows, macOS), „…_demo” deschide și „…_DEMO”. resolve() întoarce
+        # literele de pe disc doar pe Windows, deci numele exact se caută în lista folderului, la fel pe orice sistem.
+        if not _has_exact_entry(base, str(run_id)):
             return None
         return resolved
 

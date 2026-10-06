@@ -265,6 +265,14 @@ def test_a_different_letter_case_never_reaches_a_folder_on_a_case_insensitive_di
     assert store.list_runs() == [], "un folder cu litere mari în nume a ajuns în listă"
 
 
+def test_the_exact_name_check_tells_letter_case_apart_on_every_disk(tmp_path):
+    """Comparația de nume nu se bazează pe resolve() (care pe macOS păstrează literele cerute): găsește doar numele exact."""
+    (tmp_path / "2026-10-05_09-00-00_DEMO").mkdir()
+    assert app_runs._has_exact_entry(tmp_path, "2026-10-05_09-00-00_DEMO")
+    assert not app_runs._has_exact_entry(tmp_path, "2026-10-05_09-00-00_demo")
+    assert not app_runs._has_exact_entry(tmp_path / "lipsa", "orice"), "un folder care nu există nu ridică excepții"
+
+
 def test_a_junction_or_symlink_run_folder_pointing_outside_is_neither_listed_nor_readable(outputs):
     """Un „folder de rulare” care e de fapt o joncțiune/legătură spre afara iesiri/ nu apare în listă și nu se citește: altfel s-ar putea scoate date din alt folder."""
     link = outputs / RUN_A
