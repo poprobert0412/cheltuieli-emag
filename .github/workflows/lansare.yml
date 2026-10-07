@@ -132,6 +132,12 @@ jobs:
         run: |
           gh release edit "$ETICHETA" --repo "$GITHUB_REPOSITORY" --prerelease
           # releases/latest e chiar adresa din care aplicația află de versiunile noi; fără altă lansare publicată răspunde 404.
-          ULTIMA=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2> /dev/null || true)
+          # Răspunsul se actualizează cu o mică întârziere (cache): se așteaptă până la ~2 minute înainte să se conchidă că n-a mers.
+          ULTIMA=""
+          for _ in $(seq 1 12); do
+            ULTIMA=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2> /dev/null || true)
+            [ "$ULTIMA" = "$ETICHETA" ] || break
+            sleep 10
+          done
           if [ "$ULTIMA" = "$ETICHETA" ]; then echo "::error::$ETICHETA e încă ultima lansare după retragere."; exit 1; fi
           echo "::error::Testul actualizării nu a reușit: $ETICHETA e acum prerelease și nu mai e oferită ca versiune nouă. Repar-o și lansează o versiune nouă."

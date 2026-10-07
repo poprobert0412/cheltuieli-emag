@@ -39,8 +39,9 @@ jobs:
   actualizare:
     name: actualizare (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # Până la patru copii, fiecare cu pregătirea ei (uv, Python, pachete), plus reîncercările pașilor care depind de API.
-    timeout-minutes: 75
+    # Până la patru copii, fiecare cu pregătirea ei (uv, Python, pachete), plus reîncercările pașilor care depind de API și, dacă limita de
+    # cereri a IP-ului e epuizată, așteptarea resetării ei (cel mult ~55 de minute, o dată: apoi limita e plină).
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:

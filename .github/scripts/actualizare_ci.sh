@@ -16,6 +16,10 @@ FISIER_VECHI="de_sters_la_actualizare.txt"
 # Imediat după publicare, „ultima lansare” poate fi încă cea veche câteva secunde: atâtea încercări, la atâtea secunde.
 ASTEPTARI_ULTIMA=12
 PAUZA_ULTIMA_SECUNDE=10
+# Limita de cereri fără autentificare (60 pe oră) e pe IP-ul runner-ului, împărțit cu alte joburi, iar programul cere API-ul fără
+# autentificare (D2): când ea e epuizată, pauzele scurte nu ajută. Atunci jobul așteaptă resetarea (cel mult atâtea secunde, plus o marjă).
+LIMITA_MAX_SECUNDE=3300
+LIMITA_MARGINE_SECUNDE=5
 # Cât așteaptă calea (b), în secunde: prima pornire (cu pregătirea), verificarea versiunii noi și repornirea după instalare.
 ASTEPTARE_PORNIRE=180
 ASTEPTARE_VERIFICARE=120
@@ -169,17 +173,39 @@ verifica_dupa_actualizare() {
   (cd "$dosar" && amprente $DATE_UTILIZATOR) | diff "$1/date-inainte.txt" - || { echo "::error::$1: datele utilizatorului s-au schimbat"; return 1; }
 }
 
+pauza_api() {
+  # Pauza dinaintea încercării următoare: $1 = numărul încercării căzute, $2 = Python-ul copiei, $3 = ce a scris încercarea (jurnal sau
+  # răspuns), $4 = mesajul pentru jurnal. De obicei 1, 2, 3... × PAUZA_API_SECUNDE. Dacă încercarea a căzut din cauza limitei de cereri
+  # GitHub și limita IP-ului e într-adevăr epuizată (api.github.com/rate_limit nu consumă din ea), așteaptă până se resetează.
+  local incercare=$1 py=$2 jurnal=$3 mesaj=$4 raspuns ramase reset acum asteapta
+  if grep -qF "Limita de cereri GitHub" "$jurnal" 2> /dev/null; then
+    raspuns=$(curl -s --max-time 20 https://api.github.com/rate_limit 2> /dev/null || true)
+    ramase=$(printf '%s' "$raspuns" | camp_json "$py" resources.core.remaining 2> /dev/null || true)
+    reset=$(printf '%s' "$raspuns" | camp_json "$py" resources.core.reset 2> /dev/null || true)
+    case "$reset" in '' | *[!0-9]*) reset=0 ;; esac
+    acum=$(date +%s)
+    if [ "$ramase" = 0 ] && [ "$reset" -gt "$acum" ]; then
+      asteapta=$((reset - acum + LIMITA_MARGINE_SECUNDE))
+      if [ "$asteapta" -gt "$LIMITA_MAX_SECUNDE" ]; then asteapta=$LIMITA_MAX_SECUNDE; fi
+      echo "$mesaj; limita de cereri GitHub a IP-ului e epuizată, aștept $asteapta s, până se resetează."
+      sleep "$asteapta"
+      return 0
+    fi
+  fi
+  echo "$mesaj; reîncerc peste $((incercare * PAUZA_API_SECUNDE)) s."
+  sleep $((incercare * PAUZA_API_SECUNDE))
+}
+
 actualizeaza_din_terminal() {
   # Calea (a) pe copia $1: ruleaza.py --actualizeaza --fara-confirmare. Programul cere API-ul GitHub fără autentificare (D2):
   # dacă pică și versiunea a rămas cea veche (de exemplu limita de cereri), se reia; dacă a schimbat ceva și a picat, e eroare.
   local copie=$1 dosar veche incercare=1
   dosar=$(dosar_copiei "$copie")
   veche=$(cat "$copie/versiune-veche.txt")
-  until (cd "$dosar" && "$(python_copiei .)" ruleaza.py --actualizeaza --fara-confirmare); do
+  until (cd "$dosar" && "$(python_copiei .)" ruleaza.py --actualizeaza --fara-confirmare) 2>&1 | tee "$copie/actualizare.log"; do
     grep -qx "VERSION = \"$veche\"" "$dosar/emag_spend/version.py" || { echo "::error::$copie: actualizarea a picat după ce a schimbat versiunea"; return 1; }
     [ "$incercare" -lt "$REINCERCARI_API" ] || { echo "::error::$copie: actualizarea din terminal a picat de $incercare ori"; return 1; }
-    echo "$copie: actualizarea din terminal a picat (încercarea $incercare); reîncerc peste $((incercare * PAUZA_API_SECUNDE)) s."
-    sleep $((incercare * PAUZA_API_SECUNDE))
+    pauza_api "$incercare" "$(python_copiei "$dosar")" "$copie/actualizare.log" "$copie: actualizarea din terminal a picat (încercarea $incercare)"
     incercare=$((incercare + 1))
   done
   verifica_dupa_actualizare "$copie" || return 1
@@ -247,7 +273,8 @@ actualizeaza_din_aplicatie() {
     if [ "$stare" = noua ]; then
       break
     fi
-    curl -s -H "X-App-Token: $cheie" "http://127.0.0.1:$port/api/update" || true
+    curl -s -H "X-App-Token: $cheie" "http://127.0.0.1:$port/api/update" > "$copie/api-update.json" || true
+    cat "$copie/api-update.json"
     echo
     opreste_aplicatia "$port" "$cheie" || return 1
     wait "$pid" || return 1
@@ -256,8 +283,7 @@ actualizeaza_din_aplicatie() {
       cat "$jurnal"
       return 1
     fi
-    echo "$copie: verificarea din aplicație a dat «eroare» (încercarea $incercare); repornesc peste $((incercare * PAUZA_API_SECUNDE)) s."
-    sleep $((incercare * PAUZA_API_SECUNDE))
+    pauza_api "$incercare" "$py" "$copie/api-update.json" "$copie: verificarea din aplicație a dat «eroare» (încercarea $incercare)"
     incercare=$((incercare + 1))
   done
   cod=$(curl -s -o "$copie/raspuns.json" -w '%{http_code}' -X POST -H "X-App-Token: $cheie" -H 'Content-Type: application/json' -d '{}' "http://127.0.0.1:$port/api/update/apply")
