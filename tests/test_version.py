@@ -19,7 +19,7 @@ def test_the_program_version_is_a_valid_x_y_z():
 
 def test_the_first_release_is_1_0_0():
     """Versiunea curentă (prima lansare cu actualizări a fost 1.0.0, D1); la o lansare nouă testul se schimbă odată cu VERSION și CHANGELOG.md."""
-    assert VERSION == "1.0.1"
+    assert VERSION == "1.0.2"
 
 
 @pytest.mark.parametrize("text, expected", [

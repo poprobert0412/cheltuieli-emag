@@ -9,11 +9,13 @@ Nu scrie nimic în proiect (doar în folderul temporar al testului) și nu iese 
 """
 
 import importlib
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -447,6 +449,7 @@ def test_a_release_whose_update_test_fails_is_withdrawn_from_latest():
         assert part in condition.group(1), f"condiția lui «retrage» trebuie să conțină {part}: {condition.group(1)}"
     assert 'gh release edit "$ETICHETA" --repo "$GITHUB_REPOSITORY" --prerelease' in job
     assert "releases/latest" in job, "după retragere se verifică că releases/latest nu mai e lansarea retrasă"
+    assert re.search(r"for _ in \$\(seq 1 \d+\); do\n\s+ULTIMA=\$\(gh api", job), "releases/latest se întreabă de mai multe ori: răspunsul vine cu o mică întârziere"
 
 
 @pytest.mark.parametrize("name", WORKFLOW_FILES)
@@ -677,6 +680,50 @@ def test_ci_json_field_has_no_carriage_return_from_a_windows_python(tmp_path):
     result = _run_ci_tools(tmp_path, 'stare=$(echo "{}" | camp_json ./python_windows check.status)\n[ "$stare" = noua ] || { printf "[%s]" "$stare" | od -c; exit 1; }')
     out, err = _text_of(result)
     assert result.returncode == 0, f"{out}\n{err}"
+
+
+# curl fals: notează apelul în curl-apeluri.txt și scrie curl-iesire.txt (răspunsul api.github.com/rate_limit).
+FAKE_CURL = """#!/bin/sh
+AICI=$(cd "$(dirname "$0")" && pwd)
+echo "$*" >> "$AICI/curl-apeluri.txt"
+cat "$AICI/curl-iesire.txt"
+"""
+RATE_LIMIT_MESSAGE = "EROARE: Limita de cereri GitHub a fost atinsă; încearcă peste o oră."
+
+
+@needs_bash
+@pytest.mark.parametrize("log, remaining, reset_in, cap, waits, curl_calls", [
+    (RATE_LIMIT_MESSAGE, 0, 3, 3300, True, 1),
+    (RATE_LIMIT_MESSAGE, 0, 7200, 2, True, 1),
+    (RATE_LIMIT_MESSAGE, 5, 3, 3300, False, 1),
+    ("EROARE: altceva (rețea)", 0, 3, 3300, False, 0),
+], ids=["asteapta-resetarea", "plafon-la-asteptare", "limita-nu-e-epuizata", "alta-eroare-fara-cereri"])
+def test_ci_waits_for_the_rate_limit_to_reset_only_when_it_is_the_reason(tmp_path, log, remaining, reset_in, cap, waits, curl_calls):
+    """pauza_api: după o încercare căzută din cauza limitei de cereri GitHub, dacă limita IP-ului e într-adevăr epuizată, așteaptă
+    resetarea (cel mult LIMITA_MAX_SECUNDE); la orice altă eroare sau cu limita neepuizată face pauza obișnuită, iar fără mesajul
+    limitei nici nu întreabă api.github.com. (Limita de 60 de cereri pe oră e pe IP-ul runner-ului, împărțit cu alte joburi.)"""
+    tools = tmp_path / "unelte"
+    tools.mkdir()
+    (tools / "curl").write_bytes(FAKE_CURL.encode("utf-8"))
+    (tools / "curl").chmod(0o755)
+    payload = {"resources": {"core": {"limit": 60, "remaining": remaining, "reset": int(time.time()) + reset_in}}}
+    (tools / "curl-iesire.txt").write_bytes(json.dumps(payload).encode("utf-8"))
+    (tmp_path / "jurnal.txt").write_bytes(log.encode("utf-8"))
+    python = '$(cygpath -u "$PY")' if sys.platform == "win32" else "$PY"
+    commands = (f'LIMITA_MARGINE_SECUNDE=0; LIMITA_MAX_SECUNDE={cap}; start=$(date +%s)\n'
+                f'pauza_api 1 "{python}" jurnal.txt "încercarea 1 a căzut"\n'
+                'echo "durata=$(( $(date +%s) - start ))"')
+    result = _run_ci_tools(tmp_path, commands, tools, PY=sys.executable)
+    out, err = _text_of(result)
+    assert result.returncode == 0, f"{out}\n{err}"
+    seconds = int(re.search(r"durata=(\d+)", out).group(1))
+    called = tools / "curl-apeluri.txt"
+    calls = called.read_text(encoding="utf-8").splitlines() if called.exists() else []
+    assert len(calls) == curl_calls, f"apeluri curl: {calls}"
+    if waits:
+        assert "aștept" in out and 1 <= seconds <= 6, f"{out}"
+    else:
+        assert "aștept" not in out and "reîncerc peste 0 s" in out and seconds <= 1, out
 
 
 def _ci_release(folder: Path, name: str) -> None:
