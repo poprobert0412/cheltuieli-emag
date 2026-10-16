@@ -1,7 +1,8 @@
 """Generatorul fixturilor de paritate Python <-> JavaScript pentru extensia Chrome (nu e test pytest: numele nu începe cu test_).
 
 Primește: calea unui folder, ca argument. Scrie acolo nouă fișiere JSON (setari, unicode, primitive, regex, regex_aleatoare, difflib, html,
-parsere, analiza): pentru aceleași intrări, ieșirile EXACTE ale programului Python, care rămâne referința (decis 13.10.2026, E2).
+parsere, analiza): pentru aceleași intrări, ieșirile EXACTE ale programului Python, care rămâne referința (decis 13.10.2026, E2); html.json
+înregistrează și versiunile reale lxml/libxml2 (runtime și compilare), pentru profilul tokenizerului folosit la generare.
 Testele din extensie/tests/paritate/ cer de la portul JavaScript aceleași ieșiri, la ban. Pornit de extensie/scripts/ruleaza_python.mjs
 cu PYTHONHASHSEED=0; rulat de două ori, cu semințe diferite, scrie aceiași octeți (dovadă: ieșirile nu depind de ordinea seturilor).
 Ce NU face: nu citește config/categorii.personal.json (titlurile lui Robert nu ies din calculator), nu face rețea, nu scrie în afara folderului primit.
@@ -1663,14 +1664,26 @@ def _mutant_entries(base: list[dict], count: int, kind: str, parser, seed: int) 
     return entries
 
 
+def _html_parser_metadata() -> dict:
+    """Versiunile reale ale backendului BeautifulSoup «lxml»; runtime decide semantica, compilarea rămâne dovadă diagnostică."""
+    from lxml import etree
+
+    return {
+        "backend": "lxml",
+        "lxml_version": list(etree.LXML_VERSION),
+        "libxml_runtime": list(etree.LIBXML_VERSION),
+        "libxml_compiled": list(etree.LIBXML_COMPILED_VERSION),
+    }
+
+
 def _html_and_parsers_fixtures() -> tuple[dict, dict]:
-    """(html.json, parsere.json): paginile, capcanele și variantele stricate cu ieșirile lui Python."""
+    """(html.json, parsere.json): backendul HTML măsurat, paginile, capcanele și variantele stricate cu ieșirile lui Python."""
     from emag_spend.order_parser import parse_order
     from emag_spend.return_parser import parse_return
 
     pages, parsed = _page_fixture()
     parsed = parsed + _mutant_entries(parsed, ORDER_MUTANTS, "comanda", parse_order, CORPUS_SEED + 20) + _mutant_entries(parsed, RETURN_MUTANTS, "retur", parse_return, CORPUS_SEED + 21)
-    return {"pagini": pages}, {"cazuri": parsed}
+    return {"parser": _html_parser_metadata(), "pagini": pages}, {"cazuri": parsed}
 
 
 # =====================================================================================================================

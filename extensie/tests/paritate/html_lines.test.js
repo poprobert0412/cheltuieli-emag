@@ -2,7 +2,7 @@
 // Pornește un browser cu playwright-core (canalul din EXT_TEST_CHANNEL: implicit „msedge” pe Windows, „chromium” în rest), fără rețea reală (--host-resolver-rules=MAP * ~NOTFOUND): pagina de test și modulele
 // se servesc prin context.route de pe https://paritate.test/, sub CSP-ul paginilor unei extensii MV3 (script-src 'self'), iar tot ce pleacă în altă parte e un eșec al testului.
 // Se compară EXACT: o diferență apare cu pagina, prima linie diferită și cele două variante. Singurele diferențe lxml / HTML5 permise sunt cele acceptate
-// de Robert (E12), scrise în ACCEPTED_DIFFERENCES cu valorile exacte; dacă una dispare sau se schimbă, testul pică.
+// de Robert (E12), scrise în ACCEPTED_DIFFERENCES cu valorile exacte. Clarificare aprobată pe 16.10.2026: profilul runtime libxml2 stabilește dacă diferența trebuie să existe.
 // Ce NU face: nu testează parserele de comenzi (parsere.test.js) și nu folosește un server local (nicio poartă deschisă pe calculator).
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -34,22 +34,41 @@ const POLL_INTERVAL_MS = 100;
 // Praguri împotriva unui test golit în tăcere: câte pagini trebuie să aibă fixtura și câte cazuri de mână trebuie să rămână aici.
 const MIN_PAGES = 90;
 const MIN_EXTRA_CASES = 40;
-// Diferențele lxml / HTML5 acceptate de Robert pe 14.10.2026 (decizia E12), pe pagină: exact ce dă Python și exact ce dă browserul.
-// O entitate fără „;” („&amp b”) rămâne text în lxml, iar parserul HTML5 o decodează, cum o vede omul pe eMAG. Testul cere ca diferența
-// să rămână exact aceasta: dacă dispare (de exemplu cu alt lxml) sau se schimbă, pică și cere actualizarea listei; orice altă diferență pică.
+// libxml2 documentează tokenizerul HTML5 începând cu 2.14: https://gnome.pages.gitlab.gnome.org/libxml2/html/HTMLparser_8h.html.
+// Limita este a bibliotecii runtime (nu a OS-ului, a versiunii lxml sau a bibliotecii de compilare).
+const HTML5_LIBXML_MINOR = 14;
+// E12 acceptă exact perechea legacy din 14.10.2026. Clarificarea pentru libxml2 >= 2.14, aprobată de Robert pe 16.10.2026,
+// cere textul decodat exact în ambele parsere. Dispariția diferenței legacy, textul schimbat chiar dacă e egal și orice altă diferență rămân erori.
 const ACCEPTED_DIFFERENCES = new Map([
-  ['capcana_entitate_fara_punct_virgula', { linii: { python: ['a &amp b &lt c'], browser: ['a & b < c'] } }],
+  ['capcana_entitate_fara_punct_virgula', { linii: {
+    legacy: { python: ['a &amp b &lt c'], browser: ['a & b < c'] },
+    html5: { python: ['a & b < c'], browser: ['a & b < c'] },
+  } }],
 ]);
 
-const fixturePages = loadFixture('html').pagini;
+const htmlFixture = loadFixture('html');
+const fixturePages = htmlFixture.pagini;
 
-/** Textul unei diferențe acceptate care nu mai arată cum e scrisă în ACCEPTED_DIFFERENCES; null dacă e exact cea acceptată. */
-function acceptedDifferenceProblem(name, field, expected, got) {
-  const accepted = ACCEPTED_DIFFERENCES.get(name)?.[field];
-  if (!accepted) return undefined; // câmpul nu are diferență acceptată: se compară normal
-  if (JSON.stringify(expected) === JSON.stringify(got)) return `${name} / ${field}: diferența acceptată (E12) nu mai există: scoate-o din ACCEPTED_DIFFERENCES`;
+/** Profilul tokenizerului real: metadata este obligatorie, versiunile necunoscute nu sunt ghicite din ieșiri. */
+function parserProfile(parser) {
+  const versionValid = (version, length) => Array.isArray(version) && version.length === length
+    && version.every((part) => Number.isSafeInteger(part) && part >= 0) && version[0] > 0;
+  if (!parser || parser.backend !== 'lxml' || !versionValid(parser.lxml_version, 4)
+    || !versionValid(parser.libxml_runtime, 3) || !versionValid(parser.libxml_compiled, 3)
+    || parser.libxml_runtime[0] !== 2) {
+    throw new Error(`metadata parser lipsă, invalidă sau nesuportată: ${JSON.stringify(parser)}`);
+  }
+  return parser.libxml_runtime[1] >= HTML5_LIBXML_MINOR ? 'html5' : 'legacy';
+}
+
+/** Textul abaterii de la perechea exactă a profilului; null dacă e conformă, undefined pentru câmpurile fără excepție. */
+function acceptedDifferenceProblem(name, field, expected, got, parser) {
+  const profiles = ACCEPTED_DIFFERENCES.get(name)?.[field];
+  if (!profiles) return undefined; // câmpul nu are diferență acceptată: se compară normal
+  const profile = parserProfile(parser);
+  const accepted = profiles[profile];
   if (JSON.stringify(expected) !== JSON.stringify(accepted.python) || JSON.stringify(got) !== JSON.stringify(accepted.browser)) {
-    return `${name} / ${field}: diferența s-a schimbat față de cea acceptată (E12): Python ${JSON.stringify(expected)}, browserul ${JSON.stringify(got)}`;
+    return `${name} / ${field}: ieșire schimbată față de profilul ${profile} (E12): Python ${JSON.stringify(expected)}, browserul ${JSON.stringify(got)}; se cere Python ${JSON.stringify(accepted.python)}, browser ${JSON.stringify(accepted.browser)}`;
   }
   return null;
 }
@@ -58,7 +77,7 @@ function acceptedDifferenceProblem(name, field, expected, got) {
 // script / style / rt / rp nu intră în numele de produs), potrivirea exactă a claselor indiferent de doctype (DOMParser fără doctype intră în quirks mode, unde selectorii ignoră majusculele),
 // scoaterea BOM-ului și un șir de stricăciuni de HTML des întâlnite la care lxml și parserul HTML5 construiesc aceleași linii.
 // Diferențele cunoscute dintre cele două parsere (entități fără punct și virgulă, </br>, <form> în <form>, <noscript> la începutul documentului, <td> în afara unui tabel, text după </html>) NU sunt aici:
-// cea din fixtura html.json (entitățile fără punct și virgulă) pică testul de acolo, iar restul sunt în raportul agentului.
+// cea din fixtura html.json (entitățile fără punct și virgulă) este verificată prin profilul exact de mai sus, iar restul sunt în raportul agentului.
 const EXTRA_CASES = [
   { nume: 'descriere_inline_se_lipesc_cu_spatiu', html: '<ul class="product-list"><li><p class="product-description">Foo<b>bar</b>baz <i> x </i></p><span class="product-quantity">1 buc</span></li></ul>', linii: ['Foobarbaz x', '1 buc'], nume_produse: ['Foo bar baz x'] },
   { nume: 'descriere_cu_br', html: '<ul class="product-list"><li><p class="product-description">A<br>B</p><span class="product-quantity">1 buc</span></li></ul>', linii: ['A', 'B', '1 buc'], nume_produse: ['A B'] },
@@ -130,6 +149,14 @@ function describeDifference(name, field, difference) {
   return `${name} / ${field}: la indexul ${difference.index} Python are ${JSON.stringify(difference.expected)}, browserul are ${JSON.stringify(difference.got)} (${difference.expectedLength} față de ${difference.gotLength} elemente)`;
 }
 
+/** Compară prin excepția exactă declarată, dacă există, altfel prin egalitatea normală; aceeași cale este folosită de regresii și de browser. */
+function comparisonProblem(name, field, expected, got, parser) {
+  const accepted = acceptedDifferenceProblem(name, field, expected, got, parser);
+  if (accepted !== undefined) return accepted;
+  const difference = firstDifference(expected, got);
+  return difference ? describeDifference(name, field, difference) : null;
+}
+
 /** Răspunsul pentru un fișier de pe https://paritate.test/ (doar din folderele permise), sau 404. */
 function fileResponse(pathname) {
   const relative = decodeURIComponent(pathname).replace(/^\/+/, '');
@@ -159,13 +186,8 @@ describe('html_lines.js în browser (DOMParser) față de html_lines.py (Beautif
         return;
       }
       for (const field of ['linii', 'nume_produse']) {
-        const accepted = acceptedDifferenceProblem(expected.nume, field, expected[field], got[field]);
-        if (accepted !== undefined) {
-          if (accepted) differences.push(accepted);
-          continue;
-        }
-        const difference = firstDifference(expected[field], got[field]);
-        if (difference) differences.push(describeDifference(expected.nume, field, difference));
+        const problem = comparisonProblem(expected.nume, field, expected[field], got[field], htmlFixture.parser);
+        if (problem) differences.push(problem);
       }
     });
     return differences;
@@ -211,6 +233,8 @@ describe('html_lines.js în browser (DOMParser) față de html_lines.py (Beautif
 
   test(`fixtura html.json: ${fixturePages.length} pagini, liniile și numele de produse identice cu Python (în afară de diferențele acceptate, E12)`, (t) => {
     assert.ok(fixturePages.length >= MIN_PAGES, `doar ${fixturePages.length} pagini în fixtură`);
+    const profile = parserProfile(htmlFixture.parser);
+    t.diagnostic(`profil ${profile}; backend ${JSON.stringify(htmlFixture.parser)}`);
     const pageNames = new Set(fixturePages.map((page) => page.nume));
     const unused = [...ACCEPTED_DIFFERENCES.keys()].filter((name) => !pageNames.has(name));
     assert.deepEqual(unused, [], 'diferențe acceptate pentru pagini care nu mai există în fixtură: scoate-le din ACCEPTED_DIFFERENCES');
@@ -225,5 +249,59 @@ describe('html_lines.js în browser (DOMParser) față de html_lines.py (Beautif
     const differences = differencesFor(EXTRA_CASES, fixturePages.length);
     assert.deepEqual(differences, [], `${differences.length} diferențe:\n${differences.join('\n')}`);
     t.diagnostic(`${EXTRA_CASES.length} cazuri identice cu Python`);
+  });
+});
+
+describe('profiluri explicite libxml2: regresii pentru clarificarea E12 aprobată pe 16.10.2026', () => {
+  // Versiuni inventate pentru profiluri; 2.14.0 este limita tehnică documentată de libxml2, nu versiunea calculatorului sau a CI-ului.
+  const legacy = { backend: 'lxml', lxml_version: [9, 0, 0, 0], libxml_runtime: [2, 13, 99], libxml_compiled: [2, 12, 3] };
+  const html5 = { ...legacy, libxml_runtime: [2, 14, 0] };
+  const name = 'capcana_entitate_fara_punct_virgula';
+  const literal = ['a &amp b &lt c'];
+  const decoded = ['a & b < c'];
+
+  test('legacy cere exact perechea literal Python / decodat browser', () => {
+    assert.equal(comparisonProblem(name, 'linii', literal, decoded, legacy), null);
+  });
+
+  test('profilul HTML5 acceptă egalitatea exactă a textului decodat', () => {
+    assert.equal(comparisonProblem(name, 'linii', decoded, decoded, html5), null);
+  });
+
+  test('dispariția diferenței pe profilul legacy rămâne eroare', () => {
+    assert.equal(typeof comparisonProblem(name, 'linii', decoded, decoded, legacy), 'string');
+  });
+
+  test('egalitatea pe alt text nu ocolește valorile exacte ale profilului HTML5', () => {
+    assert.equal(typeof comparisonProblem(name, 'linii', literal, literal, html5), 'string');
+    assert.equal(typeof comparisonProblem(name, 'linii', ['text nou'], ['text nou'], html5), 'string');
+  });
+
+  test('orice ieșire nouă a Python-ului sau browserului este refuzată în ambele profiluri', () => {
+    for (const [parser, expected] of [[legacy, literal], [html5, decoded]]) {
+      assert.equal(typeof comparisonProblem(name, 'linii', [...expected, 'nou'], decoded, parser), 'string');
+      assert.equal(typeof comparisonProblem(name, 'linii', expected, [...decoded, 'nou'], parser), 'string');
+    }
+  });
+
+  test('alte pagini și câmpuri nu primesc excepția E12', () => {
+    assert.equal(typeof comparisonProblem('pagina_inventata', 'linii', literal, decoded, html5), 'string');
+    assert.equal(typeof comparisonProblem(name, 'nume_produse', literal, decoded, html5), 'string');
+    assert.equal(comparisonProblem('pagina_inventata', 'linii', decoded, decoded, html5), null);
+  });
+
+  test('metadata lipsă, invalidă sau cu backend necunoscut nu ghicește profilul', () => {
+    for (const parser of [undefined, null, {}, { ...legacy, backend: 'altul' }, { ...legacy, libxml_runtime: '2.14.0' },
+      { ...legacy, libxml_runtime: [2, 14] }, { ...legacy, libxml_runtime: [2, -1, 0] }, { ...legacy, libxml_runtime: [3, 0, 0] },
+      { ...legacy, lxml_version: [] }, { ...legacy, libxml_compiled: null }]) {
+      assert.throws(() => comparisonProblem(name, 'linii', literal, decoded, parser), /metadata.*parser/i);
+    }
+  });
+
+  test('profilul vine din biblioteca runtime, nu din versiunea lxml sau din cea de compilare', () => {
+    const runtimeHtml5 = { ...legacy, libxml_runtime: [2, 15, 7] };
+    const runtimeLegacy = { ...legacy, libxml_compiled: [2, 15, 7] };
+    assert.equal(comparisonProblem(name, 'linii', decoded, decoded, runtimeHtml5), null);
+    assert.equal(comparisonProblem(name, 'linii', literal, decoded, runtimeLegacy), null);
   });
 });
