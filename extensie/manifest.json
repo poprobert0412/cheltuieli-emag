@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Cât am cheltuit pe eMAG",
+  "description": "Cât ai plătit, de fapt, pe eMAG: citește comenzile și retururile din contul tău și calculează totul în browser. Neafiliat cu eMAG.",
+  "version": "0.1.0",
+  "minimum_chrome_version": "120",
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["https://www.emag.ro/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": {
+    "default_title": "Cât am cheltuit pe eMAG",
+    "default_icon": { "16": "iconite/icon-16.png", "32": "iconite/icon-32.png" }
+  },
+  "icons": {
+    "16": "iconite/icon-16.png",
+    "32": "iconite/icon-32.png",
+    "48": "iconite/icon-48.png",
+    "128": "iconite/icon-128.png"
+  }
+}

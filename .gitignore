@@ -11,6 +11,12 @@ __pycache__/
 dist/
 build/
 
+# --- Extensia Chrome: pachetele de dezvoltare (se refac cu npm ci) ---
+node_modules/
+# Capturile de verificare ale extensiei (decis de Robert pe 14.10.2026, E14): rămân pe disc, în docs/extensie/capturi/,
+# dar nu intră în depozit și nici în arhiva programului (ar adăuga ~11 MB la fiecare descărcare și actualizare).
+docs/extensie/capturi/
+
 # --- Date personale și sesiunea ta ---
 # Profilul de browser conține sesiunea ta eMAG (cookie-uri): niciodată în git, tratează-l ca pe o parolă.
 .profil_browser/

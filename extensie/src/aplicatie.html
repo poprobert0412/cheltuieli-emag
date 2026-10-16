@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="ro" data-current-screen="loading">
+<head>
+<meta charset="utf-8">
+<!-- Politica de conținut: o strânge pe cea implicită din Manifest V3 (script-src 'self'; object-src 'self'), nu o relaxează. Fără scripturi sau stiluri inline (stilurile dinamice se pun prin CSSOM). connect-src 'none': pagina extensiei nu face nicio cerere de rețea; singurele cereri ale extensiei pleacă din fila eMAG de lucru (colectare/page_functions.js). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Cât am cheltuit pe eMAG · extensia</title>
+<meta name="description" content="Cât am cheltuit pe eMAG: un singur buton care citește comenzile și retururile din contul tău eMAG și arată cât ai cheltuit de fapt. Totul rămâne în browserul tău.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f3f0">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e1114">
+<link rel="icon" type="image/png" href="iconite/icon-32.png">
+<script src="partajat/app-theme.js"></script>
+<link rel="stylesheet" href="partajat/dashboard.css">
+<link rel="stylesheet" href="partajat/app.css">
+<link rel="stylesheet" href="extensie.css">
+</head>
+<body>
+<a class="skip-link" href="#continut">Sari la conținut</a>
+
+<header class="app-head">
+  <div class="app-head__in">
+    <p class="app-brand">
+      <svg class="app-brand__mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false">
+        <path d="M6 2h20v28l-3.3-2.4L19.3 30 16 27.6 12.7 30 9.3 27.6 6 30z" fill="currentColor"/>
+        <path d="M10 9h12M10 14h12M10 19h7" stroke="var(--hl)" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+      <span class="app-brand__text">
+        <span class="app-brand__name">Cât am cheltuit pe <span translate="no">eMAG</span></span>
+        <span class="app-brand__sub">creat de Robert Pop</span>
+      </span>
+    </p>
+    <button class="theme-toggle" type="button" id="theme-toggle" data-mode="auto">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+        <g class="ic ic-auto"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></g>
+        <g class="ic ic-light"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></g>
+        <g class="ic ic-dark"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" fill="currentColor"/></g>
+      </svg>
+      <span class="theme-toggle__label" id="theme-label">Temă: automată</span>
+    </button>
+  </div>
+</header>
+
+<main id="continut" tabindex="-1">
+  <noscript>
+    <p class="noscript">Pagina asta are nevoie de JavaScript ca să funcționeze. Activează JavaScript în browser și redeschide pagina din iconița extensiei.</p>
+  </noscript>
+
+  <div class="app-wrap">
+    <h1 class="app-title">Cât ai cheltuit <span class="marker">de fapt</span> pe <span translate="no">eMAG</span></h1>
+    <!-- Versiunea extensiei, mereu vizibilă și discretă; textul îl pune ecrane/main.js din manifest. -->
+    <p class="app-meta"><span id="app-version" hidden></span></p>
+  </div>
+
+  <div class="app-wrap" id="screens">
+
+    <!-- Se verifică extensia (înainte să știm în ce stare e) -->
+    <section class="screen" id="screen-loading" data-screen="loading" aria-label="Se pregătește extensia">
+      <p class="screen__wait" role="status">Se pregătește extensia…</p>
+    </section>
+
+    <!-- (a) O ANALIZĂ RULEAZĂ DEJA într-o altă filă a extensiei -->
+    <section class="screen" id="screen-busy" data-screen="busy" hidden aria-labelledby="busy-t">
+      <h2 class="screen__title" id="busy-t" tabindex="-1">O analiză rulează deja</h2>
+      <p class="lead">Extensia face o singură analiză odată, iar acum una rulează într-o altă filă a extensiei.</p>
+      <p>Treci în acea filă sau așteaptă să se termine. Pagina asta se verifică singură la câteva secunde și se schimbă când poți începe.</p>
+      <div class="actions">
+        <button class="btn btn--small" type="button" id="btn-recheck">Verifică din nou</button>
+      </div>
+    </section>
+
+    <!-- (b) GATA DE START -->
+    <section class="screen" id="screen-ready" data-screen="ready" hidden aria-labelledby="ready-t">
+      <h2 class="screen__title" id="ready-t" tabindex="-1">Gata de start</h2>
+      <p class="lead">Extensia citește comenzile și retururile din contul tău <span translate="no">eMAG</span>, scade ce ai returnat sau ți s-a anulat și îți arată cât ai plătit de fapt pe ce ai păstrat (după vouchere și reduceri), pe categorii, ani și vânzători. Totul rămâne în browserul tău.</p>
+
+      <p class="hint session__note" id="deleted-note" role="status"></p>
+
+      <form class="start" id="start-form" novalidate autocomplete="off">
+        <button class="btn btn--primary btn--xl" type="submit" id="btn-start">Pornește analiza</button>
+        <p class="hint">Analiza și jurnalul se păstrează criptat în acest browser. Nu ajung la autor. Le elimini cu «Șterge datele».</p>
+        <p class="hint">Se deschide o filă <span translate="no">eMAG</span> în fundal, în care te loghezi tu, în contul tău. Parola nu trece prin extensie.</p>
+        <details class="options" id="options">
+          <summary>Schimbă pragul pentru achiziții mari</summary>
+          <div class="options__body">
+            <div class="field">
+              <label class="field__label" for="threshold">Prag pentru achiziții mari (Lei)</label>
+              <input class="field__input field__input--short" id="threshold" name="prag" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-describedby="threshold-hint">
+              <p class="field__hint" id="threshold-hint" aria-live="polite"></p>
+            </div>
+          </div>
+        </details>
+        <p class="field__hint start__error" id="start-error" aria-live="polite"></p>
+      </form>
+
+      <div class="demo">
+        <button class="btn" type="button" id="btn-demo">Încearcă cu date inventate</button>
+        <p class="hint">Un raport de probă, fără login: nu citește nimic din contul tău.</p>
+      </div>
+
+      <!-- Apare doar când există o analiză salvată (E4: doar ultima). Același rând ca la „Rulări anterioare” din aplicația locală. -->
+      <section class="block" id="last-block" aria-labelledby="last-t" hidden>
+        <h3 class="block__title" id="last-t">Ultima analiză</h3>
+        <p class="hint">Rămâne în acest browser până o ștergi sau o înlocuiești cu o analiză nouă.</p>
+        <ul class="runs" role="list">
+          <li class="run">
+            <div class="run__main">
+              <p class="run__when" id="last-when"></p>
+              <p class="run__meta" id="last-meta"></p>
+            </div>
+            <button class="btn btn--small" type="button" id="btn-open-last">Deschide</button>
+          </li>
+        </ul>
+      </section>
+    </section>
+
+    <!-- (c1) LOGIN: omul se loghează în fila eMAG de lucru -->
+    <section class="screen" id="screen-login" data-screen="login" hidden aria-labelledby="login-t">
+      <h2 class="screen__title" id="login-t" tabindex="-1">Loghează-te în eMAG</h2>
+      <div class="callout" data-kind="login">
+        <div class="callout__item" data-active>
+          <p class="callout__title">S-a deschis o filă <span translate="no">eMAG</span> în fundal: loghează-te acolo</p>
+          <p class="callout__text">Folosește contul tău <span translate="no">eMAG</span>. Eu aștept până la <span data-login-wait>10 minute</span>. Parola o scrii tu, în fila aceea: extensia n-o vede și nu atinge câmpurile paginii.</p>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn--primary" type="button" id="btn-show-tab"><span>Deschide fila <span translate="no">eMAG</span></span></button>
+        <button class="btn" type="button" id="btn-login-cancel">Oprește</button>
+        <p class="hint">Când ești logat, te aduc înapoi aici și analiza continuă singură.</p>
+      </div>
+    </section>
+
+    <!-- (c2) ÎN LUCRU -->
+    <section class="screen" id="screen-working" data-screen="working" hidden aria-labelledby="working-t">
+      <h2 class="screen__title" id="working-t" tabindex="-1">Analiza e în lucru</h2>
+
+      <!-- Toate variantele mesajului stau suprapuse în aceeași celulă de grilă; se vede una singură (data-active). Înălțimea cutiei e a celei
+           mai înalte, la orice lățime, deci trecerea de la „Pornesc” la „Citesc comenzile” nu mută nimic din pagină. -->
+      <div class="callout" id="work-callout" data-kind="info">
+        <div class="callout__item" data-state="starting" data-active>
+          <p class="callout__title">Pornesc…</p>
+          <p class="callout__text">Deschid o filă <span translate="no">eMAG</span> în fundal și verific dacă ești logat. Durează câteva secunde.</p>
+        </div>
+        <div class="callout__item" data-state="fetching_orders">
+          <p class="callout__title">Citesc comenzile din contul tău</p>
+          <p class="callout__text">Extensia deschide pagina fiecărei comenzi, câteva odată, în fila <span translate="no">eMAG</span> din fundal. Lasă deschise și această filă, și fila aceea.</p>
+        </div>
+        <div class="callout__item" data-state="fetching_returns">
+          <p class="callout__title">Citesc retururile</p>
+          <p class="callout__text">Acum urmează istoricul de retururi. Lasă deschise această filă și fila <span translate="no">eMAG</span> din fundal.</p>
+        </div>
+        <div class="callout__item" data-state="analyzing">
+          <p class="callout__title">Calculez raportul</p>
+          <p class="callout__text">Fiecare produs primește o singură stare: păstrat, returnat, anulat sau în curs.</p>
+        </div>
+      </div>
+
+      <ol class="steps" id="steps">
+        <li class="step" data-step="login" data-status="pending"><span class="step__mark" aria-hidden="true"></span><span class="step__name"><span class="step__no" aria-hidden="true">1</span>Conectare</span><span class="step__status">în așteptare</span></li>
+        <li class="step" data-step="orders" data-status="pending"><span class="step__mark" aria-hidden="true"></span><span class="step__name"><span class="step__no" aria-hidden="true">2</span>Comenzi</span><span class="step__status">în așteptare</span></li>
+        <li class="step" data-step="returns" data-status="pending"><span class="step__mark" aria-hidden="true"></span><span class="step__name"><span class="step__no" aria-hidden="true">3</span>Retururi</span><span class="step__status">în așteptare</span></li>
+        <li class="step" data-step="calc" data-status="pending"><span class="step__mark" aria-hidden="true"></span><span class="step__name"><span class="step__no" aria-hidden="true">4</span>Calcul</span><span class="step__status">în așteptare</span></li>
+      </ol>
+
+      <div class="progress" id="progress" data-mode="idle">
+        <p class="progress__label" id="progress-label">Aștept…</p>
+        <div class="progress__bar" id="progress-bar" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100">
+          <span class="progress__fill" id="progress-fill"></span>
+        </div>
+      </div>
+
+      <p class="hint work__detail" id="work-detail"></p>
+
+      <div class="actions">
+        <button class="btn" type="button" id="btn-cancel">Oprește</button>
+        <p class="hint">Poți opri oricând. Nu închide această filă cât rulează analiza.</p>
+      </div>
+    </section>
+
+    <!-- (d) GATA: raportul -->
+    <section class="screen screen--report" id="screen-done" data-screen="done" hidden aria-labelledby="done-t">
+      <div class="report-head">
+        <div class="report-head__text">
+          <h2 class="screen__title" id="done-t" tabindex="-1">Raportul tău</h2>
+          <p class="hint" id="done-sub"></p>
+        </div>
+        <button class="btn btn--primary" type="button" id="btn-again">Analiză nouă</button>
+      </div>
+
+      <section class="downloads" aria-labelledby="dl-t">
+        <h3 class="block__title" id="dl-t">Descarcă fișierele</h3>
+        <ul class="downloads__list" role="list">
+          <li><button class="btn dl" type="button" data-file="raport.html"><span class="dl__name" translate="no">raport.html</span><span class="dl__what">raportul complet, se deschide în browser</span></button></li>
+          <li><button class="btn dl" type="button" data-file="produse.csv"><span class="dl__name" translate="no">produse.csv</span><span class="dl__what">fiecare produs, pentru Excel</span></button></li>
+          <li><button class="btn dl" type="button" data-file="istoric_preturi.csv"><span class="dl__name" translate="no">istoric_preturi.csv</span><span class="dl__what">prețuri la același produs</span></button></li>
+          <li><button class="btn dl" type="button" data-file="analiza.json"><span class="dl__name" translate="no">analiza.json</span><span class="dl__what">cifrele raportului, în format JSON</span></button></li>
+          <li><button class="btn dl" type="button" data-file="comenzi.json"><span class="dl__name" translate="no">comenzi.json</span><span class="dl__what">comenzile citite din cont</span></button></li>
+          <li><button class="btn dl" type="button" data-file="retururi.json"><span class="dl__name" translate="no">retururi.json</span><span class="dl__what">retururile citite din cont</span></button></li>
+          <li><button class="btn dl" type="button" data-file="jurnal.txt"><span class="dl__name" translate="no">jurnal.txt</span><span class="dl__what">ce a făcut analiza (poate conține numere de comandă)</span></button></li>
+        </ul>
+        <p class="field__hint" id="dl-msg" aria-live="polite"></p>
+      </section>
+
+      <!-- „Șterge datele” (E4): doar la o analiză salvată, nu la raportul demonstrativ. Confirmarea stă în pagină, nu într-o fereastră confirm(). -->
+      <div class="block block--end" id="data-block">
+        <button class="btn btn--quiet" type="button" id="btn-delete-data" aria-expanded="false" aria-controls="delete-confirm">Șterge datele</button>
+        <p class="hint">Șterge din acest browser ultima analiză, jurnalul și cheia locală. Nu atinge nimic în contul tău <span translate="no">eMAG</span>. Fișierele descărcate se șterg separat.</p>
+        <form class="confirm" id="delete-confirm" hidden novalidate autocomplete="off">
+          <p>Ștergi analiza salvată? Cifrele, comenzile și retururile citite, jurnalul și cheia locală dispar din acest browser. Poți reface oricând analiza.</p>
+          <p class="field__hint session__note" id="delete-msg" aria-live="polite"></p>
+          <div class="actions">
+            <button class="btn btn--danger" type="submit" id="btn-delete-confirm">Da, șterge datele</button>
+            <button class="btn btn--quiet" type="button" id="btn-delete-cancel">Renunț</button>
+          </div>
+        </form>
+      </div>
+
+      <p class="status" id="report-status" role="status"></p>
+      <div class="report" id="report-root"></div>
+    </section>
+
+    <!-- (e) EROARE -->
+    <section class="screen" id="screen-error" data-screen="error" hidden aria-labelledby="error-t">
+      <h2 class="screen__title" id="error-t" tabindex="-1">Analiza s-a oprit din cauza unei probleme</h2>
+      <p class="error-box" id="error-message">Nu am primit un mesaj de la analiză.</p>
+      <h3 class="block__title">Ce faci acum</h3>
+      <ol class="todo">
+        <li>Citește mesajul de mai sus: de obicei spune singur ce lipsește.</li>
+        <li>Dacă e vorba de login sau de o sesiune expirată, apasă din nou „Pornește analiza” și loghează-te în fila care se deschide.</li>
+        <li>Dacă e vorba de internet sau de o pagină care nu s-a încărcat, verifică conexiunea și încearcă din nou.</li>
+        <li>Dacă se repetă, descarcă jurnalul și citește <a href="#faq-nu-merge" data-faq-link>„Ce fac dacă nu merge?”</a>, mai jos.</li>
+      </ol>
+      <div class="actions">
+        <button class="btn btn--primary" type="button" data-action="back">Înapoi la început</button>
+        <button class="btn" type="button" data-action="download-log" hidden>Descarcă jurnalul</button>
+      </div>
+      <p class="field__hint" data-role="log-message" aria-live="polite"></p>
+    </section>
+
+    <!-- (f) OPRIT -->
+    <section class="screen" id="screen-cancelled" data-screen="cancelled" hidden aria-labelledby="cancelled-t">
+      <h2 class="screen__title" id="cancelled-t" tabindex="-1">Analiza a fost oprită</h2>
+      <p class="lead">Nu s-a creat niciun raport nou din această rulare.</p>
+      <p>Dacă aveai o analiză salvată, a rămas neatinsă. Fila <span translate="no">eMAG</span> de lucru s-a închis.</p>
+      <div class="actions">
+        <button class="btn btn--primary" type="button" data-action="back">Înapoi la început</button>
+        <button class="btn" type="button" data-action="download-log" hidden>Descarcă jurnalul</button>
+      </div>
+      <p class="field__hint" data-role="log-message" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <div class="app-wrap">
+    <section class="faq" id="intrebari" aria-labelledby="faq-t">
+      <h2 class="faq__title" id="faq-t">Întrebări frecvente</h2>
+
+      <details class="faq__item" id="faq-ce-face">
+        <summary>Ce face butonul „Pornește analiza”?</summary>
+        <div class="faq__body">
+          <p>Face tot, în patru pași:</p>
+          <ol>
+            <li>deschide o filă <span translate="no">eMAG</span> în fundal, în care te loghezi tu în contul tău (dacă nu ești deja);</li>
+            <li>citește istoricul de comenzi și pagina fiecărei comenzi;</li>
+            <li>citește retururile;</li>
+            <li>calculează: fiecare produs primește o singură stare (păstrat, returnat, anulat sau în curs), iar raportul arată cât ai plătit efectiv pe ce ai păstrat.</li>
+          </ol>
+          <p>La final raportul apare aici, în pagină, iar fila <span translate="no">eMAG</span> de lucru se închide. „Încearcă cu date inventate” arată același raport pe comenzi inventate, fără login și fără să citească nimic din contul tău.</p>
+          <p>Proiect independent, neafiliat cu <span translate="no">eMAG</span>. Accesul automat la un cont poate fi contrar termenilor <span translate="no">eMAG</span>: folosește extensia doar pe contul tău (cere câte <span data-fetch-concurrency>3</span> pagini odată), pe răspunderea ta.</p>
+        </div>
+      </details>
+
+      <details class="faq__item" id="faq-ce-citeste">
+        <summary>Ce citește extensia și ce NU citește?</summary>
+        <div class="faq__body">
+          <p>Citește doar pagini din contul tău, după ce te-ai logat tu: istoricul de comenzi, pagina fiecărei comenzi, istoricul de retururi și pagina fiecărui retur. Din ele ia numărul comenzii, data, vânzătorul, statusul, produsele (nume, preț, cantitate), voucherele, transportul, taxele și totalurile. La retururi ia numărul, produsele, pașii cu dată, suma restituită și modul de restituire.</p>
+          <p>Nu are câmpuri pentru nume, telefon, e-mail, adresă, date de card sau coduri PIN ale returului, nu citește cookie-uri și nu caută parola ori codul 2FA. Câteva câmpuri se salvează ca text liber, exact cum le afișează <span translate="no">eMAG</span> (numele produselor, statusurile, titlurile pașilor de retur). Dacă <span translate="no">eMAG</span> schimbă pagina, în ele ar putea ajunge și alt text din apropiere, deci înainte să trimiți cuiva fișierele descărcate, deschide-le și uită-te la ele. HTML-ul paginilor nu se păstrează: se citește pe loc și se aruncă.</p>
+        </div>
+      </details>
+
+      <details class="faq__item" id="faq-login">
+        <summary>De ce trebuie să mă loghez eu?</summary>
+        <div class="faq__body">
+          <p>Ca parola și codul 2FA să nu treacă niciodată prin extensie. Fila care se deschide în fundal e o filă obișnuită <span translate="no">eMAG</span>: scrii acolo ce scrii de obicei pe <span translate="no">emag.ro</span>. Extensia doar așteaptă să vadă că ești logat; nu tastează și nu completează câmpuri, iar singurul lucru pe care îl apasă în paginile <span translate="no">eMAG</span> este butonul „Vezi mai mult” din lista de retururi.</p>
+          <p>Sesiunea rămâne a browserului tău: extensia nu citește și nu păstrează cookie-uri.</p>
+          <p>Dacă nu te loghezi în <span data-login-wait>10 minute</span>, extensia renunță și poți încerca din nou.</p>
+        </div>
+      </details>
+
+      <details class="faq__item" id="faq-durata">
+        <summary>Cât durează?</summary>
+        <div class="faq__body">
+          <p>Depinde de câte comenzi ai și de conexiunea ta: la câteva sute de comenzi, de ordinul minutelor. Progresul se vede în pagină, pe pași, cu numărul de comenzi citite. Dacă trebuie să te loghezi, se adaugă cât îți ia loginul.</p>
+        </div>
+      </details>
+
+      <details class="faq__item" id="faq-inchid">
+        <summary>Pot închide filele? Ce se întâmplă dacă le închid?</summary>
+        <div class="faq__body">
+          <p>Cât rulează analiza, lasă deschise această filă și fila <span translate="no">eMAG</span> din fundal (în ea se citesc paginile). Poți lucra în alte file.</p>
+          <p>Dacă închizi fila <span translate="no">eMAG</span> de lucru, analiza se oprește cu o eroare. Dacă închizi această filă, analiza se oprește, iar fila <span translate="no">eMAG</span> de lucru se închide singură; jurnalul până în acel punct rămâne salvat.</p>
+        </div>
+      </details>
+
+      <details class="faq__item" id="faq-salvare">
+        <summary>Ce se salvează și unde?</summary>
+        <div class="faq__body">
+          <p>Se păstrează local doar ultima analiză reușită: raportul, comenzile și retururile extrase, data, versiunea, pragul ales și jurnalul. O analiză nouă o înlocuiește numai după încheiere și salvare reușită. Jurnalul rulării curente se scrie pe parcurs; după o eroare poate rămâne până la rularea următoare sau ștergere. HTML-ul paginilor nu se păstrează.</p>
+          <p>Analiza și jurnalul sunt criptate cu AES-GCM. Cheia este generată și păstrată local, separat de date, fără să fie transmisă autorului. Nu există o parolă suplimentară. Cine controlează profilul browserului sau folosește extensia deja deschisă poate vedea raportul.</p>
+          <p>Autorul nu primește datele citite: extensia nu are server, telemetrie sau reclame. Browserul folosește sesiunea ta pentru cererile către <span translate="no">emag.ro</span> din fila de lucru, ca la o vizită obișnuită. Pagina extensiei nu face cereri de rețea. Preferința de temă este separată și nu conține istoricul cumpărăturilor.</p>
+          <p>Fișierele descărcate sunt necriptate și nu sunt șterse de extensie. Pot conține istoricul cumpărăturilor și numere de comandă; verifică-le înainte să le distribui.</p>
+        </div>
+      </details>
+
+      <details class="faq__item" id="faq-opresc">
+        <summary>Cum opresc și cum șterg tot?</summary>
+        <div class="faq__body">
+          <ul>
+            <li>Oprești analiza cu butonul „Oprește”.</li>
+            <li>„Șterge datele” elimină analiza, jurnalul și cheia locală. Preferința de temă și sesiunea contului <span translate="no">eMAG</span> sunt separate.</li>
+            <li>Dezinstalarea extensiei din browser șterge la fel tot ce a păstrat.</li>
+            <li>Fișierele descărcate sunt necriptate și trebuie șterse separat.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="faq__item" id="faq-avertismente">
+        <summary>Ce înseamnă avertismentele și linkurile spre comenzi?</summary>
+        <div class="faq__body">
+          <p>Avertismentele sunt locurile în care ceva nu se leagă sau nu e sigur. În raport sunt grupate: deschizi o grupă și vezi ce înseamnă, dacă schimbă totalurile, ce poți face și lista comenzilor la care apare. Unele avertismente schimbă totalurile, altele nu: grupa spune care.</p>
+          <p>Numărul fiecărei comenzi e un link cu săgeata ↗. La fel numele fiecărui produs din tabele: se face albastru când treci cu mouse-ul peste el și duce la comanda lui (la un produs din mai multe comenzi, la cea mai recentă). Se deschide pe <span translate="no">emag.ro</span>, într-o filă nouă, doar când apeși pe el.</p>
+        </div>
+      </details>
+
+      <details class="faq__item" id="faq-cifre">
+        <summary>De ce pot diferi cifrele de pagina <span translate="no">eMAG</span>?</summary>
+        <div class="faq__body">
+          <p>Cifra mare e suma „Total plătit” a comenzilor livrate sau ridicate (după vouchere și reduceri, cu transportul și taxele), minus banii primiți înapoi la retururi. Scade doar returnările finalizate; un retur doar cerut nu scade, iar unul restituit ca voucher sau sold <span translate="no">eMAG</span> nu se scade, fiindcă voucherul scade comanda în care îl folosești. Ce a fost anulat sau e încă în curs are rândul lui și nu intră în calcul.</p>
+          <p>Atenție: extensia e nouă și nu a fost încă verificată pe multe conturi reale. <span translate="no">eMAG</span> își poate schimba paginile oricând, iar atunci extensia poate da erori sau cifre greșite. Verifică totalurile cu pagina „Comenzile mele” din contul tău.</p>
+        </div>
+      </details>
+
+      <details class="faq__item" id="faq-sigur">
+        <summary>E sigur?</summary>
+        <div class="faq__body">
+          <p>Extensia cere în browser doar trei lucruri: să păstreze ultima analiză, să citească paginile din fila <span translate="no">eMAG</span> de lucru și accesul la <span translate="no">emag.ro</span>. Nu are acces la alte site-uri, la cookie-urile tale, la istoricul de navigare sau la descărcări, și nu încarcă niciun cod de pe internet.</p>
+          <p>Nu există cont, parolă sau server al autorului, iar parola ta <span translate="no">eMAG</span> nu trece prin extensie. Codul este public (licență GPL-3.0).</p>
+        </div>
+      </details>
+
+      <details class="faq__item" id="faq-nu-merge">
+        <summary>Ce fac dacă nu merge?</summary>
+        <div class="faq__body">
+          <ol>
+            <li>Citește mesajul din pagină: spune ce s-a întâmplat și, de obicei, ce faci.</li>
+            <li>Dacă scrie că nu te-ai logat sau că sesiunea a expirat, pornește din nou analiza și loghează-te în fila care se deschide.</li>
+            <li>Verifică internetul: extensia citește paginile de pe <span translate="no">emag.ro</span> și are nevoie de conexiune.</li>
+            <li>Nu închide și nu folosi fila <span translate="no">eMAG</span> de lucru cât rulează analiza.</li>
+            <li>Jurnalul se descarcă din ecranul de eroare sau din raportul salvat (<span translate="no">jurnal.txt</span>). Poate conține numere de comandă: nu-l posta public.</li>
+          </ol>
+          <p>Dacă tot nu merge, deschide un Issue în proiectul de pe GitHub, fără numere de comandă și fără fișiere cu comenzile tale.</p>
+        </div>
+      </details>
+
+      <details class="faq__item" id="faq-internet">
+        <summary>Merge fără internet?</summary>
+        <div class="faq__body">
+          <p>Nu, pentru analiza contului: extensia citește comenzile de pe <span translate="no">emag.ro</span>, deci are nevoie de internet cât timp rulează. Merg fără internet „Încearcă cu date inventate” și raportul salvat. Extensia nu verifică singură versiuni noi: browserul o actualizează.</p>
+        </div>
+      </details>
+    </section>
+  </div>
+</main>
+
+<footer class="app-foot">
+  <div class="app-wrap">
+    <p>Proiect independent, neafiliat cu <span translate="no">eMAG</span>. Extensia nu trimite nimic nicăieri: totul rămâne în browserul tău.</p>
+    <p>© Robert Pop, licență GPL-3.0</p>
+  </div>
+</footer>
+
+<div class="sr-only" id="app-live" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<script src="partajat/dashboard.js"></script>
+<script src="partajat/app-dom.js"></script>
+<script src="partajat/app-format.js"></script>
+<script src="partajat/app-threshold.js"></script>
+<script src="partajat/demo-data.js"></script>
+<script type="module" src="ecrane/main.js"></script>
+</body>
+</html>

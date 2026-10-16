@@ -3,7 +3,7 @@
 [![Licență: GPL-3.0](https://img.shields.io/badge/licen%C8%9B%C4%83-GPL--3.0-blue.svg)](LICENSE)
 [![Teste](https://github.com/poprobert0412/cheltuieli-emag/actions/workflows/teste.yml/badge.svg)](https://github.com/poprobert0412/cheltuieli-emag/actions/workflows/teste.yml)
 
-**Cât ai cheltuit, de fapt, pe eMAG.** Programul citește comenzile și retururile din contul tău eMAG și îți arată cât ai plătit pe ce ai păstrat: pe categorii, pe ani, pe produse. Rulează pe calculatorul tău, pe Windows, macOS și Linux.
+**Cât ai cheltuit, de fapt, pe eMAG.** Programul citește comenzile și retururile din contul tău eMAG și îți arată cât ai plătit pe ce ai păstrat: pe categorii, pe ani, pe produse. Rulează pe calculatorul tău, pe Windows, macOS și Linux. Există și ca [extensie pentru Chrome](#extensia-chrome), în testare.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/raport-intunecat.jpg">
@@ -77,6 +77,19 @@ Când apare o versiune nouă, aplicația îți spune și o instalezi cu **Actual
 
 Detalii: [docs/INSTALARE.md](docs/INSTALARE.md#actualizare).
 
+## Extensia Chrome
+
+**Cât am cheltuit pe eMAG — în pregătire pentru publicare.** Aceeași analiză, ca extensie pentru Chrome: fără Python, arhivă sau lansatoare, iar analiza rulează în browserul tău. Extensia nu e publicată încă în Chrome Web Store; după publicare, o instalezi cu butonul de instalare din pagina ei de acolo, apoi apeși iconița extensiei și **Pornește analiza**.
+
+- Citește aceleași pagini din contul tău, dintr-o filă eMAG pe care o deschide în fundal. Te loghezi tu; parola și codul 2FA nu trec prin extensie.
+- Nu trimite istoricul cumpărăturilor autorului: fără server al autorului, cont sau telemetrie. Păstrează criptat în browser ultima analiză și jurnalul; „Șterge datele” elimină și cheia locală. Fișierele descărcate sunt necriptate și se șterg separat.
+- Are temă automată, luminoasă și întunecată; alegerea se păstrează la redeschidere.
+- Calculul e portat din program și comparat automat cu el, pe aceleași intrări; pe contul autorului, la 14 oct. 2026, extensia a citit și a calculat aceleași cifre ca programul. Programul Python rămâne referința.
+- Deocamdată doar Chrome 120 sau mai nou, doar emag.ro, doar în română, fără regulile personale de categorii.
+- La fel ca programul: neafiliată cu eMAG, iar accesul automat la cont poate fi contrar termenilor eMAG; o folosești pe răspunderea ta, doar pe contul tău.
+
+Ce citește, ce păstrează și cum ștergi: [politica de confidențialitate a extensiei](docs/CONFIDENTIALITATE-EXTENSIE.md). Securitate: [SECURITY.md](SECURITY.md#extensia-chrome). Cum o construiești și o testezi din cod: [CONTRIBUTING.md](CONTRIBUTING.md#extensia-chrome).
+
 ## Limitări
 
 - **Neafiliat cu eMAG.** Accesul automat la cont poate fi contrar termenilor eMAG: îl folosești pe răspunderea ta, doar pe contul tău.
@@ -90,9 +103,10 @@ Detalii: [docs/INSTALARE.md](docs/INSTALARE.md#actualizare).
 - [Cum se calculează](docs/CALCUL.md): definiția fiecărei cifre din raport.
 - [Întrebări frecvente](docs/INTREBARI.md): login, permisiuni, cifre diferite de eMAG, categorii.
 - [Securitate](SECURITY.md): ce face programul în rețea și pe disc, ce garantează testele.
+- [Extensia Chrome: confidențialitate](docs/CONFIDENTIALITATE-EXTENSIE.md): ce citește, ce păstrează, cum ștergi. Textele pentru magazin și ghidul de publicare: [docs/MAGAZIN-EXTENSIE.md](docs/MAGAZIN-EXTENSIE.md).
 - [Contribuții](CONTRIBUTING.md): cum rulezi testele și cum trimiți o modificare.
 - [Ce e nou](CHANGELOG.md) și [deciziile deja luate](docs/DECIZII.md).
 
 ## Licență
 
-[GPL-3.0](LICENSE). Copyright © 2026 Robert Pop. „eMAG” este marca proprietarilor ei și apare aici doar ca să spună ce site citește programul; proiectul nu este creat, aprobat sau sponsorizat de eMAG.
+[GPL-3.0](LICENSE). Copyright © 2026 Robert Pop. „eMAG” este marca proprietarilor ei și apare aici doar ca să spună ce site citesc programul și extensia; proiectul nu este creat, aprobat sau sponsorizat de eMAG.

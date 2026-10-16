@@ -1,6 +1,8 @@
 # Rulează toate testele (inclusiv gărzile de rețea, parole și scriere) la fiecare push pe main și la fiecare pull request,
 # pe Windows, macOS și Linux. Testele de browser folosesc Edge sau Chrome, preinstalate pe mașinile GitHub; dacă un browser
 # lipsește, testele respective se sar (și apar în jurnal cu motivul). Testele .bat rulează doar pe Windows.
+# Al doilea job, `extensie`, verifică extensia Chrome (extensie/): testele unitare, paritatea cu Python, construirea și testele
+# cap-coadă în Chromium, apoi urcă arhiva gata de încărcat în magazin ca artefact.
 # Îl cheamă și lansare.yml, înainte de publicare (decis 6 oct. 2026, N13): o lansare apare doar după ce testele trec.
 # Fără secrete: workflow-ul nu primește niciunul și are drepturi doar de citire.
 name: Teste
@@ -61,3 +63,65 @@ jobs:
       - name: Testele picate, ca adnotări
         if: failure()
         run: python .github/scripts/adnotari_pytest.py "${{ runner.temp }}/pytest.xml"
+
+  extensie:
+    name: extensia Chrome (verify, Chromium)
+    runs-on: ubuntu-24.04
+    # Termenul jobului e pragul lui Robert (ci-cd.md, 13.10.2026: niciun job de teste peste 20 de minute). Durata estimată local e ~7 minute
+    # (unitare, paritate, construire și e2e) plus ~3 pentru instalare; după prima rulare reală se coboară la ~2-3 ori durata măsurată.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      PYTHONUTF8: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      # Generatorul fixturilor de paritate (tests/paritate_export.py) rulează cu Python-ul pornit mai sus, nu cu un .venv care aici nu există.
+      PYTHON: python
+      # Canalul browserului pentru testele cap-coadă: Chromium-ul instalat de Playwright (pe Windows, local, e Edge).
+      EXT_TEST_CHANNEL: chromium
+      # Cât stă arhiva extensiei în artefacte: 14 zile (propus) acoperă o rundă de recenzie și încărcarea în magazin, iar arhiva se reface oricând din commit;
+      # artefactele ocupă din cele 500 MB ale contului (ci-cd.md), deci nu rămân cele 90 de zile implicite. Arhiva are ~0,3 MB.
+      ARCHIVE_RETENTION_DAYS: "14"
+    steps:
+      - name: Descarcă codul
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Pornește Python 3.13
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      # Aceleași pachete ca la jobul pytest: generatorul de paritate cere beautifulsoup4 și lxml.
+      - name: Instalează dependențele Python
+        run: "python -m pip install --disable-pip-version-check --no-cache-dir --only-binary=:all: -r requirements-dev.txt"
+
+      - name: Pornește Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      # npm ci pică dacă package-lock.json nu se potrivește cu package.json; nu rulează scripturi de instalare ale unor pachete de rulare (extensia nu are).
+      - name: Instalează pachetele de dezvoltare ale extensiei
+        working-directory: extensie
+        run: npm ci
+
+      - name: Instalează Chromium și bibliotecile lui
+        working-directory: extensie
+        run: npx playwright-core install --with-deps chromium
+
+      # Aceeași comandă ca local: testele unitare, paritatea cu Python, construirea strictă și testele cap-coadă (npm run verify).
+      # Termenul pasului stă sub cel al jobului, ca un test blocat să oprească pasul, nu jobul, și pașii de după să poată rula.
+      - name: Verifică extensia
+        working-directory: extensie
+        timeout-minutes: 15
+        run: npm run verify
+
+      - name: Urcă arhiva extensiei
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cheltuieli-emag-extensie
+          path: extensie/dist/*.zip
+          if-no-files-found: error
+          retention-days: ${{ env.ARCHIVE_RETENTION_DAYS }}

@@ -53,7 +53,7 @@ body { margin: 0; background: var(--rp-page); color: var(--rp-ink); font: 14px/1
   <p class="rp-sr" id="rp-theme-live" role="status" aria-live="polite"></p>
 </header>
 <main id="raport">
-  <noscript><p class="rp-noscript">Raportul are nevoie de JavaScript ca să se deseneze. Aceleași cifre sunt în <code>rezumat.txt</code> și <code>produse.csv</code>, din același folder.</p></noscript>
+  <noscript><p class="rp-noscript"><!--__REPORT_NOSCRIPT__-->Raportul are nevoie de JavaScript ca să se deseneze. Aceleași cifre sunt în <code>rezumat.txt</code> și <code>produse.csv</code>, din același folder.<!--__REPORT_NOSCRIPT_END__--></p></noscript>
 </main>
 
 <script id="date-analiza" type="application/json">/*__DATE_ANALIZA__*/null</script>
@@ -62,9 +62,15 @@ body { margin: 0; background: var(--rp-page); color: var(--rp-ink); font: 14px/1
 (function () {
   'use strict';
   var root = document.getElementById('raport');
+  /* Desktop păstrează opțiunile implicite; extensia completează explicit contextul și numele din manifest. */
+  var reportOptions = /*__REPORT_OPTIONS__*/{};
+  if (typeof reportOptions.appName === 'string') {
+    document.title = reportOptions.appName;
+    document.querySelector('.rp-top h1').textContent = reportOptions.appName;
+  }
   var data = null;
   try { data = JSON.parse(document.getElementById('date-analiza').textContent); } catch (e) { data = null; }
-  if (window.EmagDashboard) window.EmagDashboard.mount(root, data);
+  if (window.EmagDashboard) window.EmagDashboard.mount(root, data, reportOptions);
 
   /* Butonul de temă: automată -> luminoasă -> întunecată, ținută minte în localStorage. */
   var button = document.getElementById('rp-theme');

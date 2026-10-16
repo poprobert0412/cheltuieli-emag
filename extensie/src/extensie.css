@@ -1,0 +1,8 @@
+/* extensie.css — singurul CSS al extensiei în afara designului partajat (partajat/app.css și partajat/dashboard.css, copiate neschimbate la build).
+ * Ce face: mărește INVIZIBIL zona de atingere a butoanelor la cel puțin 44 px, fără să schimbe cum arată ceva. Designul are controale de 40 px (--target din app.css), iar regula noastră
+ * pentru zone de atingere cere 44 px; cei 4 px lipsă se acoperă cu un element transparent care iese 2 px sus și jos din chenarul butonului (3 px din cutia interioară, fiindcă butonul are
+ * chenar de 1 px) și face parte din el: clicul și atingerea ajung tot la buton.
+ * Ce NU face: nu schimbă dimensiunea, culoarea, spațiile sau fonturile nimănui; nu stilează raportul și nu redefinește nicio clasă din design.
+ * Abaterea e notată în raportul agentului, ca întrebare pentru Robert (designul rămâne cel de 40 px). */
+.btn, .theme-toggle { position: relative; }
+.btn::before, .theme-toggle::before { content: ""; position: absolute; inset: -3px 0; }

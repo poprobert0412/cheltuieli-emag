@@ -68,6 +68,33 @@ După o actualizare, codul deja instalat la utilizatori citește fișierele vers
 - **Repornirea:** codul 75 (`settings.EXIT_CODE_RESTART`) cere repornirea după o actualizare din aplicație; îl așteaptă `porneste.*` și `instalare/dupa_rulare.bat` din versiunile instalate.
 - **Forma lansării:** eticheta `vX.Y.Z`, arhiva `cheltuieli-emag-vX.Y.Z.zip` cu prefixul `cheltuieli-emag-vX.Y.Z/`, `SHA256SUMS.txt` alături și `VERSION = "X.Y.Z"` scris ca text în `emag_spend/version.py`. Nicio cale protejată (datele utilizatorului, lista din `emag_spend/update_recovery.py`) nu apare în arhivă: versiunile instalate ar refuza-o întreagă.
 
+## Extensia Chrome
+
+Codul stă în `extensie/` (Manifest V3, JavaScript fără bundler și fără dependențe la rulare; `playwright-core` și `fake-indexeddb` sunt doar pentru teste). Programul Python rămâne referința: aceleași intrări trebuie să dea aceleași ieșiri de calcul, la ban, în program și în extensie (E2). Instrucțiunile raportului diferă explicit după context: programul pentru calculator sau extensia.
+
+**Ce ai nevoie:** Node 24 sau mai nou (`engines` din `extensie/package.json`) și, pentru testele de paritate, `.venv`-ul programului (pregătit de lansator; `extensie/scripts/ruleaza_python.mjs` îl caută singur, iar variabila `PYTHON` alege alt Python). Din folderul `extensie/`:
+
+```
+npm ci                 # o dată: instalează dependențele de test fixate în lockfile
+npm run test:unit      # testele fiecărui modul
+npm run test:paritate  # rulează întâi generatorul Python (tests/paritate_export.py), apoi cere egalitate exactă
+npm run build          # extensie/dist/ și arhiva extensie/dist/cheltuieli-emag-<versiune>.zip
+npm run test:e2e       # browser cu extensia încărcată, pe un eMAG fals (construiește întâi)
+npm run verify         # toate, în ordine
+```
+
+Încarci extensia în Chrome din `extensie/dist/`: în `chrome://extensions` pornești „Developer mode” (modul pentru dezvoltatori), apoi „Load unpacked” (încarcă un folder), și alegi folderul. După o schimbare în `extensie/src/`, o construiești din nou și reîncarci extensia.
+
+Regulile specifice extensiei (cele de mai sus se aplică și aici):
+
+- **Paritate.** O schimbare de calcul în `emag_spend/` se poartă în `extensie/src/calcul/` în același pull request, altfel `npm run test:paritate` pică. Fișierul portat are numele modulului Python (`order_parser.py` devine `order_parser.js`), funcțiile au numele din Python în camelCase, iar cheile datelor sunt cele din `to_dict`. Capcanele Python ↔ JavaScript (`//` și `%` pe numere negative, `round`, compararea și sortarea textului pe puncte de cod, expresiile regulate, dicționarele cu chei din date, `strip()` și `split()` fără argument) au funcții în `extensie/src/calcul/python_compat.js`: folosește-le, nu operatorii JavaScript.
+- **Rețea și permisiuni.** Singurul `fetch` din extensie e în `extensie/src/colectare/page_functions.js`, doar pe căi relative la `www.emag.ro`. Manifestul are exact `storage`, `scripting` și `https://www.emag.ro/*`. O permisiune, o adresă sau o cerere nouă cere, în același pull request: o decizie în [docs/DECIZII.md](docs/DECIZII.md), schimbarea lui `tests/test_garda_extensie.py`, a [politicii de confidențialitate](docs/CONFIDENTIALITATE-EXTENSIE.md) și a justificărilor din [docs/MAGAZIN-EXTENSIE.md](docs/MAGAZIN-EXTENSIE.md): magazinul compară formularul de date și politica cu ce face extensia.
+- **Testele nu ating rețeaua reală.** Browserul de test pornește cu `--host-resolver-rules=MAP * ~NOTFOUND`, iar eMAG-ul din teste e fals, servit de `context.route`, fără redirecționări (Playwright nu interceptează urmarea lor, deci ar pleca spre rețeaua reală). Local, testele de browser folosesc Edge (canalul `msedge`; Chromium-ul descărcat de Playwright nu pornește în toate mediile, iar Chrome oficial nu încarcă extensii din linia de comandă), în CI `chromium`; variabila `EXT_TEST_CHANNEL` alege canalul. Un test nou nu cere cont eMAG și nu folosește date reale.
+- **Date inventate.** Ca la program: nume de produse, numere de comandă și sume din teste sunt inventate sau vin din generatorul Python. Fixturile generate stau în `extensie/build/` (ignorat de git).
+- **Caractere.** Fără NBSP literal (U+00A0), fără litere cu sedilă (U+015F, U+0163 și majusculele lor) și fără caractere invizibile în surse; le scrii ca secvențe cu `\u` și verifici octeții după scriere, fiindcă unele unelte de editare transformă secvența în caracterul real. `tests/test_garda_caractere.py` caută caracterele invizibile în tot ce urcă în depozit, iar `tests/test_garda_extensie.py` caută și literele cu sedilă din `extensie/`.
+- **Versiunea** extensiei are o singură sursă, `extensie/manifest.json` (E8), separată de versiunea programului (`emag_spend/version.py`). La fiecare versiune nouă adaugi în `extensie/CHANGELOG.md` secțiunea `## X.Y.Z — AAAA-LL-ZZ`. Chrome Web Store cere ca fiecare urcare să aibă o versiune mai mare decât ultima.
+- **Publicarea** în Chrome Web Store e manuală (E11): CI construiește arhiva, iar cine are contul de dezvoltator o urcă. Pașii, textele și răspunsurile din formular: [docs/MAGAZIN-EXTENSIE.md](docs/MAGAZIN-EXTENSIE.md).
+
 ## Pull request
 
 Completează lista din șablon. Pe scurt: testele trec, nu ai date personale, nu ai secrete, documentația e la zi.

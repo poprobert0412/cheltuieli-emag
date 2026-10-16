@@ -8,7 +8,8 @@
    La fel numele fiecărui produs din tabele (productLink): duce la comanda lui (la un rând cu mai multe comenzi,
    la cea mai recentă), se face albastru la hover și la focus, iar în date de demonstrație rămâne text.
    Ce primește: mount(root, data, options) cu options = { demo?: boolean,
-   headingLevel?: 1-5 (implicit 2: titlurile blocurilor sunt h2, cele din ele h3) }.
+   headingLevel?: 1-5 (implicit 2: titlurile blocurilor sunt h2, cele din ele h3),
+   context?: 'extension' (implicit desktop: instrucțiuni pentru programul de calculator) }.
    Cheile `paid`, `price_history` și `warnings_detail` din analiza.json sunt OPȚIONALE: un fișier vechi, fără ele,
    se desenează ca înainte (la preț de listă, fără blocul de prețuri, cu lista simplă de avertismente).
    Listele și tabelele lungi se desenează câte ROWS_PAGE rânduri („Arată încă”); tabelele cu
@@ -271,6 +272,13 @@
 
   const KIND_TEXT = { int: 'un număr întreg', str: 'text', 'str?': 'text sau null', 'num?': 'un număr sau null', bool: 'adevărat sau fals', list: 'o listă', obj: 'un obiect' };
   const FILE_HINT = 'Încarcă fișierul analiza.json din folderul iesiri\\<data>_<ora>\\ al unei rulări.';
+  // Texte aprobate de Robert pe 16.10.2026: contextul vine explicit de la gazdă, nu din URL sau din datele raportului.
+  const EXTENSION_REPORT_HINT = 'Pornește din nou analiza. Dacă problema persistă, descarcă jurnalul și raportează eroarea fără datele comenzilor.';
+  const EXTENSION_CATEGORIES = 'Extensia folosește categoriile incluse. Regulile personale sunt disponibile în programul pentru calculator.';
+  const EXTENSION_UNCATEGORIZED = 'Verifică produsele rămase fără categorie. Extensia nu permite adăugarea regulilor personale.';
+  const EXTENSION_RETURNS = 'Modurile de restituire sunt cele incluse în extensie.';
+  const EXTENSION_THRESHOLD = 'Pragul se schimbă înainte de pornirea analizei.';
+  const EXTENSION_OTHER_ACTION = 'Citește fiecare rând. Dacă numește o comandă, deschide-o pe eMAG și compară-o cu ce arată raportul. ' + EXTENSION_UNCATEGORIZED;
 
   const clip = (s, n) => (s.length > n ? s.slice(0, n) + '…' : s);
   function describeValue(v) {
@@ -324,26 +332,29 @@
     });
   }
 
-  function missingMessage(missing, topLevel) {
+  function missingMessage(missing, topLevel, fileHint) {
     const shown = missing.slice(0, 6).join(', ') + (missing.length > 6 ? ', …' : '');
     if (topLevel) {
       return 'Fișierul nu pare să fie analiza.json generată de program: ' +
-        (missing.length === 1 ? 'lipsește cheia ' : 'lipsesc cheile ') + shown + '. ' + FILE_HINT;
+        (missing.length === 1 ? 'lipsește cheia ' : 'lipsesc cheile ') + shown + '. ' + fileHint;
     }
-    return (missing.length === 1 ? 'Lipsește cheia ' : 'Lipsesc cheile ') + shown + '. Fișierul pare modificat sau generat de o altă versiune a programului; rulează din nou programul.';
+    return (missing.length === 1 ? 'Lipsește cheia ' : 'Lipsesc cheile ') + shown + (fileHint === EXTENSION_REPORT_HINT
+      ? '. ' + fileHint
+      : '. Fișierul pare modificat sau generat de o altă versiune a programului; rulează din nou programul.');
   }
 
   /**
    * Verifică forma datelor. Întoarce { ok, errors } cu mesaje în română; nu aruncă
    * niciodată (nici pe obiecte ostile) și ignoră cheile necunoscute (versiuni viitoare).
    */
-  function validate(data) {
+  function validate(data, options) {
+    const fileHint = options && options.context === 'extension' ? EXTENSION_REPORT_HINT : FILE_HINT;
     try {
       if (data === null || data === undefined) {
-        return { ok: false, errors: ['Nu am primit niciun conținut pentru raport. ' + FILE_HINT] };
+        return { ok: false, errors: ['Nu am primit niciun conținut pentru raport. ' + fileHint] };
       }
       if (!isPlain(data)) {
-        return { ok: false, errors: ['Fișierul nu conține un obiect JSON, ci ' + describeValue(data) + '. ' + FILE_HINT] };
+        return { ok: false, errors: ['Fișierul nu conține un obiect JSON, ci ' + describeValue(data) + '. ' + fileHint] };
       }
       const ctx = { problems: [], missing: [] };
       walk(data, SCHEMA, '', ctx);
@@ -351,7 +362,7 @@
       const errors = [];
       const topMissing = ctx.missing.filter((k) => k.indexOf('.') < 0);
       const nestedMissing = ctx.missing.filter((k) => k.indexOf('.') >= 0);
-      if (topMissing.length) errors.push(missingMessage(topMissing, true));
+      if (topMissing.length) errors.push(missingMessage(topMissing, true, fileHint));
       // Grupăm cheile lipsă pe obiectul părinte: un singur mesaj pentru „big”, nu câte unul per cheie.
       const byParent = new Map();
       nestedMissing.forEach((k) => {
@@ -360,7 +371,7 @@
         if (!byParent.has(parent)) byParent.set(parent, []);
         byParent.get(parent).push(k.slice(cut + 1));
       });
-      byParent.forEach((keys, parent) => { errors.push(parent + ': ' + missingMessage(keys, false)); });
+      byParent.forEach((keys, parent) => { errors.push(parent + ': ' + missingMessage(keys, false, fileHint)); });
       ctx.problems.forEach((p) => errors.push(p));
       [['by_year_category', data.by_year_category], ['paid.by_year_category', isPlain(data.paid) ? data.paid.by_year_category : null]].forEach(([name, yc]) => {
         if (errors.length || !isPlain(yc)) return;
@@ -375,7 +386,7 @@
       }
       return { ok: errors.length === 0, errors };
     } catch (e) {
-      return { ok: false, errors: ['Nu am putut verifica datele (fișierul are o structură neobișnuită). ' + FILE_HINT] };
+      return { ok: false, errors: ['Nu am putut verifica datele (fișierul are o structură neobișnuită). ' + fileHint] };
     }
   }
 
@@ -577,6 +588,7 @@
 
   function createInstance(root, options) {
     const opts = options && typeof options === 'object' ? options : {};
+    const extensionContext = opts.context === 'extension';
     // Date de demonstrație (opțiunea `demo` a gazdei sau `meta.demo` din analiza.json): comenzile sunt inventate, deci
     // numerele lor rămân text. Se stabilește la fiecare desenare, din datele primite.
     let demoMode = false;
@@ -1003,9 +1015,10 @@
       });
       return block('categories', 'Pe ce s-au dus banii',
         h('div', { class: 'ed-sec-head' }, heading('Pe ce s-au dus banii'), button),
-        P
-          ? h('p', { class: 'ed-caption' }, 'Banii plătiți pe produsele păstrate, pe categorii, după reduceri: fiecare produs primește partea lui din voucherele și reducerile comenzii, proporțional cu prețul. Rândurile care nu sunt produse stau separat, ca toate rândurile să se adune exact la cât ai cheltuit. Regulile tale de categorii le pui în ', h('code', { class: 'ed-path', translate: 'no' }, 'config/categorii.personal.json'), ', pe care actualizarea îl păstrează.')
-          : h('p', { class: 'ed-caption' }, 'Valoarea produselor păstrate (livrate sau ridicate și nereturnate), pe categorii. Regulile tale de categorii le pui în ', h('code', { class: 'ed-path', translate: 'no' }, 'config/categorii.personal.json'), ', pe care actualizarea îl păstrează.'),
+        h('p', { class: 'ed-caption' }, P
+          ? 'Banii plătiți pe produsele păstrate, pe categorii, după reduceri: fiecare produs primește partea lui din voucherele și reducerile comenzii, proporțional cu prețul. Rândurile care nu sunt produse stau separat, ca toate rândurile să se adune exact la cât ai cheltuit. '
+          : 'Valoarea produselor păstrate (livrate sau ridicate și nereturnate), pe categorii. ',
+        extensionContext ? EXTENSION_CATEGORIES : ['Regulile tale de categorii le pui în ', h('code', { class: 'ed-path', translate: 'no' }, 'config/categorii.personal.json'), ', pe care actualizarea îl păstrează.']),
         h('div', { class: 'ed-card' }, barsHost, tableHost));
     }
 
@@ -1440,7 +1453,8 @@
     /**
      * O grupă de avertismente ca `<details>`: titlul, câte cazuri are și dacă schimbă totalurile se văd închis;
      * deschisă arată ce înseamnă, ce faci și comenzile concrete, fiecare cu link spre eMAG. Textele vin din
-     * config/avertismente.json (prin analiza.json), nu din cod.
+     * config/avertismente.json (prin analiza.json). Instrucțiunea grupei `other` diferă explicit după context:
+     * extensia nu poate edita regulile personale; datele analizei și instrucțiunea desktop rămân intacte (aprobat 16.10.2026).
      */
     function warningGroup(g) {
       const head = [{ label: 'Data', nowrap: true }, { label: 'Detaliu', name: true }, { label: 'Vânzător' }, { label: 'Comanda' }];
@@ -1454,7 +1468,7 @@
             h('span', { class: 'ed-wg-aff' }, 'Afectează totalurile: ' + (affects ? 'da' : 'nu')))),
         h('div', { class: 'ed-wg-body' },
           h('p', { class: 'ed-wg-text' }, rich(g.explanation)),
-          h('p', { class: 'ed-wg-text' }, h('strong', null, 'Ce faci: '), rich(g.what_to_do)),
+          h('p', { class: 'ed-wg-text' }, h('strong', null, 'Ce faci: '), rich(extensionContext && g.kind === 'other' ? EXTENSION_OTHER_ACTION : g.what_to_do)),
           g.items.length
             ? paged(g.items, (slice) => tableWrap(g.title, buildTable(g.title, head, warningRows(slice), null, true)))
             : emptyNote('Niciun rând de afișat.')));
@@ -1524,7 +1538,8 @@
         const more = D.uncategorized_count > shown.length ? ' (primele ' + int(shown.length) + ')' : '';
         stack.appendChild(h('details', null,
           h('summary', null, count(D.uncategorized_count, 'produs necategorizat', 'produse necategorizate') + more),
-          h('p', { class: 'ed-caption ed-after-summary' }, 'Adaugă reguli în ', h('code', { class: 'ed-path', translate: 'no' }, 'config/categorii.personal.json'), ' și refă raportul cu ', h('code', { translate: 'no' }, '--din-cache'), '.'),
+          h('p', { class: 'ed-caption ed-after-summary' }, extensionContext ? EXTENSION_UNCATEGORIZED
+            : ['Adaugă reguli în ', h('code', { class: 'ed-path', translate: 'no' }, 'config/categorii.personal.json'), ' și refă raportul cu ', h('code', { translate: 'no' }, '--din-cache'), '.']),
           tableWrap('Produse necategorizate', buildTable('Produse necategorizate',
             [{ label: 'Produs', name: true }, { label: 'Buc', num: true }, { label: 'Valoare', num: true }],
             shown.map((u) => [productLink(u.name, u.order_id, u.order_count, demoMode), int(u.units), lei(u.bani)]), null, true))));
@@ -1543,7 +1558,8 @@
           h('p', null, h('strong', null, 'Cum se calculează. '), rich('Comandat = valoarea tuturor produselor din comenzi. Păstrat = comandat minus anulat, returnat și cele încă nelivrate. Un retur finalizat se numără ca returnat, nu ca anulare. Pe paginile observate la scrierea programului, produsele vândute de eMAG și returnate rămân în comandă cu factură storno, iar la vânzătorii din marketplace eMAG marchează returul „Livrare anulată”; dacă la contul tău apare altfel, verifică în cont cifrele de la retururi.')),
           h('p', null, h('strong', null, 'Ce nu intră. '), 'Asigurările plătite fără livrare de produse, comenzile în curs și returnările fără pasul „Restituire sumă” (cererea rămâne doar înregistrată sau anulată; produsul rămâne numărat ca păstrat). Un status necunoscut nu e numărat niciodată ca livrat.'),
           h('p', null, h('strong', null, 'Prețuri. '), rich('Sumele pe produs sunt cele afișate de eMAG înainte de vouchere. Voucherele, transportul și taxele sunt în cifrele de control.')),
-          h('p', null, h('strong', null, 'Achiziție mare. '), 'Un produs cu prețul pe bucată strict peste ' + lei(D.meta.threshold_bani) + '. Pragul se schimbă cu ', h('code', { translate: 'no' }, '--prag'), ' la rulare.')));
+          h('p', null, h('strong', null, 'Achiziție mare. '), 'Un produs cu prețul pe bucată strict peste ' + lei(D.meta.threshold_bani) + '. ',
+            extensionContext ? EXTENSION_THRESHOLD : ['Pragul se schimbă cu ', h('code', { translate: 'no' }, '--prag'), ' la rulare.'])));
     }
 
     /** Nota de metodă a unui raport cu `paid`: regulile banilor plătiți, ale retururilor și ce rămâne la preț de listă. */
@@ -1553,11 +1569,12 @@
         h('div', { class: 'ed-method' },
           h('p', null, h('strong', null, 'Cât ai cheltuit. '), rich('Suma „Total plătit” a fiecărei comenzi livrate sau ridicate (după vouchere, card cadou și reduceri, cu transportul și taxele), minus banii primiți înapoi la retururi. O comandă fără „Total plătit” afișat se calculează din componentele ei: produse, reduceri, transport, taxe.')),
           h('p', null, h('strong', null, 'Pe produse. '), rich('Fiecare produs primește partea lui din reducerile comenzii, proporțional cu prețul lui, în bani întregi; așa restituie și eMAG la retur. Transportul și taxele nu se împart pe produse: au rândul lor, „Transport și taxe”, ca rândurile de la categorii să se adune exact la cât ai cheltuit.')),
-          h('p', null, h('strong', null, 'Retururi. '), rich('Un retur finalizat se numără ca returnat, nu ca anulare. Cu bani înapoi: se scade suma restituită afișată; dacă pagina nu o arată, partea plătită a produsului (estimare, numărată la cifrele de control). Cu voucher sau sold eMAG: nu se scade nimic, fiindcă voucherul scade deja „Total plătit” al comenzii în care îl folosești; scăzut și aici, ar fi scăzut de două ori. Pe paginile observate la scrierea programului, produsele vândute de eMAG și returnate rămân în comandă cu factură storno, iar la vânzătorii din marketplace eMAG marchează returul „Livrare anulată”: acolo plata și restituirea se anulează reciproc, iar un astfel de retur cu voucher se adaugă o singură dată, la „Retururi cu voucher sau sold eMAG”. Dacă la contul tău apare altfel, verifică în cont cifrele de la retururi. Modurile de restituire se pot edita în '),
-            h('code', { translate: 'no' }, 'config/restituiri.json'), '.'),
+          h('p', null, h('strong', null, 'Retururi. '), rich('Un retur finalizat se numără ca returnat, nu ca anulare. Cu bani înapoi: se scade suma restituită afișată; dacă pagina nu o arată, partea plătită a produsului (estimare, numărată la cifrele de control). Cu voucher sau sold eMAG: nu se scade nimic, fiindcă voucherul scade deja „Total plătit” al comenzii în care îl folosești; scăzut și aici, ar fi scăzut de două ori. Pe paginile observate la scrierea programului, produsele vândute de eMAG și returnate rămân în comandă cu factură storno, iar la vânzătorii din marketplace eMAG marchează returul „Livrare anulată”: acolo plata și restituirea se anulează reciproc, iar un astfel de retur cu voucher se adaugă o singură dată, la „Retururi cu voucher sau sold eMAG”. Dacă la contul tău apare altfel, verifică în cont cifrele de la retururi. '),
+            extensionContext ? EXTENSION_RETURNS : ['Modurile de restituire se pot edita în ', h('code', { translate: 'no' }, 'config/restituiri.json'), '.']),
           h('p', null, h('strong', null, 'Ce nu intră. '), 'Comenzile anulate, cele în curs, asigurările plătite fără livrare de produse și returnările fără pasul „Restituire sumă” (cererea rămâne doar înregistrată sau anulată; produsul rămâne numărat ca păstrat). Un status necunoscut nu e numărat niciodată ca livrat.'),
-          h('p', null, h('strong', null, 'Prețuri de listă. '), 'Pragul pentru „achiziție mare” (strict peste ' + lei(D.meta.threshold_bani) + ' pe bucată, se schimbă cu ', h('code', { translate: 'no' }, '--prag'),
-            ') și „Prețuri la același produs” folosesc prețul de listă pe bucată: sunt comparații de preț, nu de bani plătiți.')));
+          h('p', null, h('strong', null, 'Prețuri de listă. '), 'Pragul pentru „achiziție mare” (strict peste ' + lei(D.meta.threshold_bani) + ' pe bucată',
+            extensionContext ? '' : [', se schimbă cu ', h('code', { translate: 'no' }, '--prag')],
+            ') și „Prețuri la același produs” folosesc prețul de listă pe bucată: sunt comparații de preț, nu de bani plătiți.', extensionContext ? ' ' + EXTENSION_THRESHOLD : null)));
     }
 
     /* ---------- stare de eroare: date lipsă sau greșite ---------- */
@@ -1567,7 +1584,8 @@
         heading('Nu pot afișa raportul'),
         h('p', { class: 'ed-note' }, 'Datele primite nu au forma pe care o așteaptă raportul:'),
         h('ul', { class: 'ed-error-list' }, list),
-        h('p', { class: 'ed-hint' }, 'Alege din nou fișierul analiza.json din folderul unei rulări (iesiri\\<data>_<ora>\\) sau refă rularea din aplicația locală.'))));
+        h('p', { class: 'ed-hint' }, extensionContext ? EXTENSION_REPORT_HINT
+          : 'Alege din nou fișierul analiza.json din folderul unei rulări (iesiri\\<data>_<ora>\\) sau refă rularea din aplicația locală.'))));
     }
 
     function renderReport(data) {
@@ -1590,7 +1608,7 @@
       if (demoMode) root.appendChild(h('div', { class: 'ed-banner', role: 'note' }, 'Date de demonstrație, inventate. Nu sunt comenzile nimănui.'));
       tip = h('div', { class: 'ed-tip', role: 'tooltip', hidden: 'hidden' });
       live = h('p', { class: 'ed-sr', role: 'status', 'aria-live': 'polite' });
-      const check = validate(data);
+      const check = validate(data, opts);
       self.ok = check.ok;
       self.errors = check.errors;
       root.setAttribute('data-ed-state', check.ok ? 'ready' : 'error');
@@ -1602,7 +1620,7 @@
         } catch (err) {
           // Bug de desenare pe date neașteptate: arătăm eroarea în loc de o pagină pe jumătate goală.
           self.ok = false;
-          self.errors = ['Nu am putut desena raportul din aceste date. Încearcă să refaci rularea din aplicația locală.'];
+          self.errors = ['Nu am putut desena raportul din aceste date. ' + (extensionContext ? EXTENSION_REPORT_HINT : 'Încearcă să refaci rularea din aplicația locală.')];
           root.setAttribute('data-ed-state', 'error');
           clearRoot();
           if (demoMode) root.appendChild(h('div', { class: 'ed-banner', role: 'note' }, 'Date de demonstrație, inventate. Nu sunt comenzile nimănui.'));

@@ -1,4 +1,8 @@
-"""Reguli verificate direct pe sursa componentei dashboard (fără browser): CSS scopat, tokeni, JS curat, șablon corect."""
+"""Verifică static sursele raportului: CSS scopat, contrast, JavaScript și șablon HTML.
+
+Primește fișierele comune din configurarea proiectului și produce aserțiuni pytest.
+Verifică și marcajele contextului extensiei; nu execută interfața în browser.
+"""
 
 import re
 
@@ -232,7 +236,9 @@ def test_js_declares_every_block_of_the_contract():
 # ---------- șablonul raportului ----------
 
 def test_template_has_each_placeholder_exactly_once():
-    for placeholder in ("/*__DASHBOARD_CSS__*/", "/*__DASHBOARD_JS__*/", "/*__DATE_ANALIZA__*/null"):
+    """Fiecare marcaj de design, date și context trebuie să aibă exact un loc în șablon."""
+    for placeholder in ("/*__DASHBOARD_CSS__*/", "/*__DASHBOARD_JS__*/", "/*__DATE_ANALIZA__*/null",
+                        "/*__REPORT_OPTIONS__*/{}", "<!--__REPORT_NOSCRIPT__-->", "<!--__REPORT_NOSCRIPT_END__-->"):
         assert TEMPLATE.count(placeholder) == 1, placeholder
 
 
@@ -247,10 +253,13 @@ def test_template_head_follows_the_guidelines():
 
 
 def test_template_is_a_small_skeleton_with_theme_button_skip_link_and_noscript():
+    """Verifică structura accesibilă și apelul raportului cu opțiuni desktop implicite."""
     assert len(TEMPLATE.splitlines()) < 140
     assert '<a class="rp-skip" href="#raport">' in TEMPLATE
     assert '<main id="raport">' in TEMPLATE and "<noscript>" in TEMPLATE
     assert 'translate="no">eMAG</span>' in TEMPLATE
-    assert "EmagDashboard.mount(root, data)" in TEMPLATE
+    # Contextul extensiei este explicit; opțiunile goale păstrează comportamentul desktop.
+    assert "var reportOptions = /*__REPORT_OPTIONS__*/{};" in TEMPLATE
+    assert "EmagDashboard.mount(root, data, reportOptions)" in TEMPLATE
     assert "emag-tema" in TEMPLATE
     assert "http://" not in TEMPLATE and "https://" not in TEMPLATE

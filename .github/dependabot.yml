@@ -1,5 +1,5 @@
-# Dependabot propune, o dată pe săptămână, actualizări pentru pachetele Python fixate și pentru acțiunile GitHub
-# fixate pe SHA. Nu comite nimic singur: fiecare actualizare vine ca pull request, trece prin teste și o
+# Dependabot propune, o dată pe săptămână, actualizări pentru pachetele Python și npm fixate și pentru acțiunile
+# GitHub fixate pe SHA. Nu comite nimic singur: fiecare actualizare vine ca pull request, trece prin teste și o
 # aprobi tu. Actualizările minore și de corecție se grupează într-un singur pull request; cele majore vin separat.
 version: 2
 updates:
@@ -21,4 +21,14 @@ updates:
     open-pull-requests-limit: 5
     groups:
       actiuni-github:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/extensie"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      dependente-extensie:
         update-types: ["minor", "patch"]

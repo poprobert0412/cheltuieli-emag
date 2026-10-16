@@ -1,7 +1,7 @@
 """Trimiterile din cod la decizii, față de tabelul din docs/DECIZII.md: fiecare Id citat are un rând, fiecare rând e citat.
 
 Primește: tot ce urcă în git (tests.garda_support.files_to_publish), fără tabel, fără acest fișier și fără binare; tabelul din
-docs/DECIZII.md. Verifică: (1) fiecare trimitere D…, N…, P… din cod („decis 6 oct. 2026, N13”, „D2/D4”, „N8a”) și fiecare membru al
+docs/DECIZII.md. Verifică: (1) fiecare trimitere D…, N…, P…, E… din cod („decis 6 oct. 2026, N13”, „D2/D4”, „N8a”) și fiecare membru al
 unui interval („P1–P8” = P1, P2, …, P8) are un rând în coloana Id; (2) fiecare Id din tabel e citat măcar o dată în cod (altfel rândul e
 mort); (3) tabelul are coloana Id prima, iar Id-urile au forma literă + număr (+ a–d) și nu se repetă; (4) excepțiile (potriviri care
 nu sunt trimiteri, ca „Vitamina D3” din catalogul demonstrativ) au motiv scris și mai sunt necesare; (5) trimiterile din textul
@@ -23,8 +23,9 @@ DECISIONS_FILE = PROJECT_ROOT / "docs" / "DECIZII.md"
 HEADER = ["Id", "Data", "Decizia", "Unde"]
 # Rândul unei decizii fără Id în cod (de exemplu sesiunea eMAG, 4 oct. 2026).
 NO_ID = "—"
-# Seriile de decizii: D (5 oct. 2026), N și P (6 oct. 2026). Celelalte litere din teste sunt constatări de audit, nu decizii.
-SERIES = "DNP"
+# Seriile de decizii: D (5 oct. 2026), N și P (6 oct. 2026), E (extensia Chrome, 13–14 oct. 2026). Celelalte litere din teste sunt constatări
+# de audit, nu decizii.
+SERIES = "DNPE"
 # O trimitere: litera seriei, una sau două cifre și, opțional, o literă a–d (N8a), ca un cuvânt întreg („ID1”, „D123” nu sunt).
 REFERENCE = re.compile(rf"\b[{SERIES}][0-9]{{1,2}}[a-d]?\b")
 # Un interval din aceeași serie, cu liniuță lungă sau scurtă, pe același rând: „N1–N14” trimite și la N2, N3, …, N13. Fără
@@ -40,6 +41,7 @@ MIN_REASON_LENGTH = 30
 # Testul de necesitate de mai jos pică imediat ce una nu mai apare, ca lista să nu rămână deschisă.
 NOT_REFERENCES = {
     "Vitamina D3": "numele unui produs inventat din catalogul demonstrativ (emag_spend/demo_catalog.py și demo-data.js făcut din el)",
+    "Becuri LED E27": "numele unui produs inventat din catalogul demonstrativ (soclul E27; emag_spend/demo_catalog.py, demo_scenario.py și demo-data.js)",
 }
 
 
@@ -176,6 +178,7 @@ def test_exceptions_are_justified_and_still_needed():
     ("N8b, S1/J3, P8: legătură", {"N8b", "P8"}),
     ("decis de Robert pe 5 oct. 2026", set()),
     ("Vezi D2\n- D9 pe rândul următor", {"D2", "D9"}),
+    ("Iconița (decis 14 oct. 2026, E13); E1–E3 din 13 oct. 2026", {"E13", "E1", "E2", "E3"}),
 ])
 def test_the_detector_finds_references_and_ranges(text, expected):
     """Trimiterile simple, cele cu literă (N8b), cele lipite cu «/» și fiecare membru al unui interval sunt găsite."""
@@ -184,6 +187,7 @@ def test_the_detector_finds_references_and_ranges(text, expected):
 
 @pytest.mark.parametrize("text", [
     "Supliment alimentar Vitamina D3 2000 UI",
+    "Becuri LED E27 Lumio 9W, set 6 buc",
     "R1, S2, J7, C4, V1-1, V2-3",
     "ID1, PD1, 1D2, D123, N8e, x86_64",
 ])
