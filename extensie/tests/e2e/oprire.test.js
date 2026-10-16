@@ -151,21 +151,33 @@ scenario('clicul pe iconița extensiei', {}, (ctx) => {
     const click = () => helper.evaluate(async () => {
       const module = await import(chrome.runtime.getURL('background.js'));
       const id = await module.openOrFocusApp();
-      let tab = await chrome.tabs.get(id);
-      for (let attempt = 0; attempt < 30 && !tab.url; attempt += 1) { // o filă nou creată are adresa abia după câteva zeci de milisecunde
-        await new Promise((resolve) => { setTimeout(resolve, 100); });
-        tab = await chrome.tabs.get(id);
-      }
-      return { id, url: tab.url, active: tab.active };
+      const tab = await chrome.tabs.get(id);
+      return { id, active: tab.active };
     });
     const same = await click();
     assert.equal(same.id, appTabId, 'cu aplicația deschisă, clicul nu deschide altă filă');
     assert.equal(same.active, true, 'o aduce în față');
     await page.close();
     const created = await click();
-    assert.equal(created.url, s.appUrl, 'fără aplicație deschisă, clicul deschide pagina aplicației');
     assert.equal(created.active, true);
     assert.notEqual(created.id, appTabId);
+    // tabs.Tab.url este opțional și Chromium 153 nu îl expune aici; contextul extensiei leagă URL-ul exact de ID fără permisiuni suplimentare.
+    const contexts = await waitFor(async () => {
+      const found = await helper.evaluate(async (url) => chrome.runtime.getContexts({
+        contextTypes: ['TAB'], documentUrls: [url],
+      }), s.appUrl);
+      return found.some((entry) => entry.tabId === created.id) ? found : null;
+    }, { timeoutMs: SCREEN_TIMEOUT_MS, what: 'contextul aplicației redeschise de clic, cu ID-ul creat' });
+    assert.deepEqual(contexts.map(({ tabId, documentUrl }) => ({ tabId, documentUrl })), [
+      { tabId: created.id, documentUrl: s.appUrl },
+    ], 'există un singur context al aplicației, cu URL-ul exact și ID-ul creat');
+    const reopened = await waitFor(
+      () => s.context.pages().find((candidate) => candidate.url() === s.appUrl),
+      { timeoutMs: SCREEN_TIMEOUT_MS, what: 'pagina reală a aplicației redeschise de clic' },
+    );
+    await s.screen(reopened, 'ready');
+    assert.equal(await reopened.evaluate(async () => (await chrome.tabs.getCurrent()).id), created.id, 'pagina funcțională este chiar fila creată');
     assert.equal((await click()).id, created.id, 'încă un clic nu deschide a doua filă');
+    assert.equal(s.context.pages().filter((candidate) => candidate.url() === s.appUrl).length, 1, 'rămâne exact o filă a aplicației');
   });
 });
