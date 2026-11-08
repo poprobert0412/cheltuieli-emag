@@ -142,8 +142,11 @@ scenario('panou: produs principal, țintă criptată și navigare', {}, (ctx) =>
     assert.match(await panel.textContent('#panel-status'), /șterse/);
     assert.equal(await panel.inputValue('#target-price'), '');
     assert.equal(await panel.textContent('#read-product'), 'Reîncarcă panoul');
-    await panel.locator('#read-product').click();
-    await panel.waitForFunction(() => document.getElementById('read-product').textContent === 'Citește produsul');
+    await Promise.all([
+      panel.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+      panel.locator('#read-product').click(),
+    ]);
+    assert.equal(await panel.textContent('#read-product'), 'Citește produsul');
     assert.ok(await panel.isHidden('#product'));
   });
   test('raportul complet reutilizează aplicația și API-ul nativ deschide context SIDE_PANEL', async () => {

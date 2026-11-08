@@ -55,3 +55,11 @@ Capturile reale sunt în `docs/extensie/capturi/2026-11-08-implementare/`: rapor
 - Politica și formularul de magazin au un addendum propus în `docs/aprobare-confidentialitate-2026-11-08.md`; aprobarea lui este necesară înaintea publicării. Niciun furnizor nou sau cost introdus.
 - Scanerele Semgrep, Gitleaks și npm audit nu au găsit probleme. OSV nu era instalat; nu este declarat rulat.
 - Un singur commit include și modificările staged existente; E25 autorizează push-ul de pe PC. Verificarea rulărilor CI urmează după push; acest raport nu pretinde un rezultat CI încă neobservat. Runnerul nu modifică comenzile/retururile și nu trimite preferințele la eMAG.
+
+## Corecția testului după primul push
+
+Commit-ul inițial `83a4fbf` a fost împins de pe PC, cu remote identic. Robert a confirmat ulterior versiunea 1.1.0 activă în Chrome. CodeQL și verificarea dependențelor au trecut; joburile de descărcare uv/Gitleaks au primit HTTP 504, inclusiv la o reluare. Scanarea locală Gitleaks a tuturor celor 30 de commit-uri și a arborelui staged nu a găsit secrete.
+
+CI Chromium a trecut 110 din 112 teste; cele două eșecuri proveneau din aceeași sondă la `sidepanel.test.js`: după clicul de reîncărcare, predicatul citea butonul din documentul tranzitoriu, unde elementul nu exista încă, și producea TypeError plus eșecul gărzii de consolă. Testul instalează acum așteptarea navigării înainte de clic, așteaptă DOMContentLoaded, apoi verifică explicit același text și ascunderea produsului. Nu există sleep, allowlist sau excepție care să ascundă o eroare.
+
+Verificare locală a corecției: parser trecut, trei probe izolate ale panoului (30/30), apoi suita completă Edge (112/112), fără erori de consolă/CSP/rețea. Jurnale: `_meta/ci-panou-fix*.log` și `_meta/ci-fix-full-e2e.log`. Producția și hash-ul ZIP 1.1.0 sunt neschimbate. Robert a autorizat explicit un al doilea commit/push pentru această corecție; starea finală CI se verifică pe acel commit, fără a declara anticipat succesul.
