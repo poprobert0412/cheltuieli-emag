@@ -1,7 +1,7 @@
 // Calculează cât s-a cheltuit efectiv, pe categorii, ani, vânzători și produse (portul lui emag_spend/spend_analysis.py).
 // Primește: comenzile, retururile, clasificatorul, pragul „achiziție mare” (bani, pe prețul de listă pe bucată), ora generării și, în `options`, textele avertismentelor, culorile și modurile
 // de restituire gata încărcate (loadWarningTexts, loadColorWords, loadRefundModes; în extensie nu se citește niciun fișier), categoriile evidențiate și, opțional, `log` (info/warning, ca RunLog).
-// Dă înapoi: { summary, lines } = `summary` (arbore JSON simplu, sume în BANI, procentele ca PyFloat, ca JSON-ul să le scrie „5.0” ca Python) + registrul de linii (LineOutcome) pentru CSV.
+// Dă înapoi: { summary, lines, paid_by_order } = rezumatul (sume în BANI, procente PyFloat), registrul LineOutcome pentru CSV și atribuiri Map pe comandă pentru perioade.
 // PyFloat nu se salvează în chrome.storage și nu trece de verificările din dashboard.js (cer numere): `plainSummary(summary)` dă copia cu numere simple, pentru salvare și pentru ecran.
 // Cifra principală e cheia `paid` (paid_totals.js): banii plătiți efectiv. Rândurile au și sume plătite (`paid_*`), lângă cele la preț de listă (cheile vechi, păstrate pentru rapoartele vechi).
 // Ce NU face: nu citește pagini, nu scrie fișiere și nu modifică comenzile sau retururile primite.
@@ -429,7 +429,7 @@ function uncategorizedOf(lines, defaultCategory) {
 }
 
 /**
- * Rulează toată analiza și întoarce { summary, lines }. O categorie din `highlightCategories` care nu există în regulile clasificatorului primește un avertisment
+ * Rulează toată analiza și întoarce { summary, lines, paid_by_order }. O categorie din `highlightCategories` care nu există în regulile clasificatorului primește un avertisment
  * (totalul ei ar apărea 0, un rezultat greșit care pare normal). `warningTexts`, `colorWords` și `refundModes` sunt obligatorii: în extensie nu există fișierele din care le-ar citi Python.
  */
 export function analyze(orders, returns, classifier, thresholdBani, generatedAt, { highlightCategories = [], warningTexts, colorWords, refundModes, log = null } = {}) {
@@ -499,7 +499,8 @@ export function analyze(orders, returns, classifier, thresholdBani, generatedAt,
     warnings_detail: buildWarningsDetail(warnings, orders, returns, reconciliation.header_total_mismatches, warningTexts, log),
   };
   log?.info(LOG_MODULE, `analiză: ${orders.length} comenzi, plătit efectiv ${paid.summary.spent_bani} bani (păstrat la preț de listă ${funnel.kept_bani} bani), ${warnings.length} avertismente`);
-  return { summary, lines };
+  // API adițional pentru filtrele de cumpărături; rezumatul de referință rămâne neschimbat.
+  return { summary, lines, paid_by_order: paid.by_order };
 }
 
 /**

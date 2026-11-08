@@ -4,11 +4,15 @@
 // Numele din date intră doar prin textContent, în interiorul componentei. Ce NU face: nu validează schema (o face EmagDashboard.mount), nu descarcă fișiere (download_buttons.js) și nu șterge nimic singură (main.js).
 // Același bloc de ștergere poate apărea pe ecranul de eroare pentru recuperarea datelor criptate; confirmarea și ascultătorii rămân aceiași.
 import { DEMO_FILES } from '../exporturi/export_files.js';
+import { mountShoppingApp } from '../cumparaturi/shopping_app.js';
 
 const HEADING_LEVEL = 3; // ecranul are h2 „Raportul tău”; blocurile raportului sunt h3
 const DEMO_NOTE = 'Rulare de probă, cu date inventate.';
 
 let mounted = null;
+let shoppingMounted = null;
+let shoppingAbort = null;
+let reportVersion = 0;
 let onNewAnalysis = () => {};
 let onDeleteData = () => {};
 
@@ -19,6 +23,16 @@ export function showDataDeletionOnError(visible) {
   closeDeleteConfirm(false);
   block.hidden = !visible;
   if (visible) dom.byId('screen-error').append(block);
+  else dom.byId('screen-done').insertBefore(block, dom.byId('report-status'));
+}
+
+/** Pune aceeași ștergere pe start, inclusiv când există doar o listă fără analiză. */
+export function showDataDeletionOnStart(visible) {
+  const { dom } = window.App;
+  const block = dom.byId('data-block');
+  closeDeleteConfirm(false);
+  block.hidden = !visible;
+  if (visible) dom.byId('screen-ready').append(block);
   else dom.byId('screen-done').insertBefore(block, dom.byId('report-status'));
 }
 
@@ -53,18 +67,24 @@ function openDeleteConfirm() {
 /** Scoate raportul din pagină și îl dezmontează. */
 export function hideReport() {
   const { dom } = window.App;
+  reportVersion += 1;
+  shoppingAbort?.abort(); shoppingAbort = null;
+  shoppingMounted?.dispose(); shoppingMounted = null;
+  const shoppingRoot = dom.byId('shopping-root');
+  if (shoppingRoot) dom.clear(shoppingRoot);
   if (mounted) {
     mounted.unmount();
     mounted = null;
   }
   dom.clear(dom.byId('report-root'));
+  dom.byId('report-root').hidden = false;
   dom.byId('report-status').textContent = '';
   dom.byId('dl-msg').textContent = '';
   closeDeleteConfirm(false);
 }
 
 /** Arată raportul: `kind` 'saved' sau 'demo'; `summary` e analiza; `createdAt` data salvării (doar la 'saved'). */
-export function showReport({ kind, summary, createdAt }) {
+export function showReport({ kind, summary, createdAt, entry, defaults }) {
   const { dom, format } = window.App;
   hideReport();
   const demo = kind === 'demo';
@@ -81,6 +101,18 @@ export function showReport({ kind, summary, createdAt }) {
   }
   status.className = 'status';
   mounted = window.EmagDashboard.mount(dom.byId('report-root'), summary, { demo, headingLevel: HEADING_LEVEL, context: 'extension' });
+  const shoppingRoot = dom.byId('shopping-root');
+  if (!shoppingRoot || !entry) return;
+  const version = reportVersion;
+  shoppingAbort = new AbortController();
+  void mountShoppingApp(shoppingRoot, { entry, defaults, demo, signal: shoppingAbort.signal }).then((result) => {
+    if (version !== reportVersion) result.dispose();
+    else shoppingMounted = result;
+  }).catch((error) => {
+    if (version !== reportVersion) return;
+    status.className = 'status is-bad';
+    status.textContent = error.message;
+  });
 }
 
 /** Leagă butoanele ecranului: „Analiză nouă” / „Înapoi la început” și „Șterge datele” cu confirmarea ei. */

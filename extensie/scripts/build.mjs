@@ -1,8 +1,8 @@
 // build.mjs — construiește extensia gata de încărcat în dist/ și arhiva ei (cheltuieli-emag-<versiune>.zip), fără dependențe.
 // Primește: nimic (calea implicită: extensie/dist), sau --strict (modulele încărcate leneș trebuie să existe) și --out <folder>. Dă înapoi: dist/ cu manifestul, src/**, sursele unice copiate din interfata/ și config/, LICENSE și arhiva.
 // Sursele unice rămân unde sunt (E7): interfata/assets/ (raportul și designul ecranelor), config/*.json, templates/raport.html; build-ul doar le copiază în dist/partajat/ și le scrie ca module în dist/generat/
-// (config.js, raport_sursa.js), ca extensia să nu facă nicio cerere nici la propriile fișiere. Regulile personale de categorii (config/categorii.personal.json) NU intră în v1 (specificația §12).
-// Verifică la sfârșit: fiecare fișier cerut de manifest și de aplicatie.html există, iar fiecare import relativ are țintă (cele încărcate leneș cu import() lipsă dau avertisment; cu --strict, eroare).
+// (config.js, raport_sursa.js, shopping_config.js și shopping_demo.js), fără cereri către propriile fișiere. Regulile personale de categorii NU intră în pachet.
+// Verifică la sfârșit: fiecare fișier cerut de manifest și de paginile HTML există, iar fiecare import relativ are țintă (cele încărcate leneș lipsă dau avertisment; cu --strict, eroare).
 // Ce NU face: nu rulează teste, nu minifică și nu publică nimic.
 import {
   cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync,
@@ -24,7 +24,6 @@ const CONFIG_FILES = Object.freeze({
   categorii: 'categorii.json', avertismente: 'avertismente.json', culori: 'culori.json', restituiri: 'restituiri.json',
 });
 const REPORT_TEMPLATE = path.join('templates', 'raport.html');
-const APP_PAGE = 'aplicatie.html';
 const BOM = String.fromCharCode(0xfeff);
 // Importuri relative într-un fișier JS: statice (import ... from, export ... from, import 'x') și dinamice cu cale literală (import('x')).
 const STATIC_IMPORT = /(?:^|\n)\s*(?:import|export)\s[^'"`;]*?from\s*['"]([^'"]+)['"]/g;
@@ -47,19 +46,21 @@ function pathsIn(value) {
 
 /** Fișierele cerute de manifest (worker-ul și iconițele) trebuie să existe în `outDir`. */
 function checkManifestFiles(outDir, manifest) {
-  const required = [manifest.background?.service_worker, ...pathsIn(manifest.action?.default_icon), ...pathsIn(manifest.icons)].filter(Boolean);
+  const required = [manifest.background?.service_worker, manifest.side_panel?.default_path, ...pathsIn(manifest.action?.default_icon), ...pathsIn(manifest.icons)].filter(Boolean);
   for (const relative of required) {
     if (!existsSync(path.join(outDir, relative))) throw new Error(`manifestul cere ${relative}, dar fișierul lipsește din ${outDir}`);
   }
 }
 
-/** Referințele din aplicatie.html (src și href) trebuie să existe în `outDir`; o adresă externă e eroare (CSP-ul ar bloca-o oricum). */
+/** Referințele paginilor HTML ale extensiei trebuie să existe; nicio resursă externă nu intră în pachet. */
 function checkHtmlReferences(outDir) {
-  const html = readFileSync(path.join(outDir, APP_PAGE), 'utf8');
-  for (const [, reference] of html.matchAll(HTML_REFERENCE)) {
-    if (reference.startsWith('#') || reference.startsWith('data:')) continue;
-    if (/^(?:[a-z]+:)?\/\//i.test(reference)) throw new Error(`${APP_PAGE} cere o resursă externă: ${reference}`);
-    if (!existsSync(path.join(outDir, reference.split('#')[0]))) throw new Error(`${APP_PAGE} cere ${reference}, dar fișierul lipsește din ${outDir}`);
+  for (const page of listFiles(outDir).filter((name) => name.endsWith('.html'))) {
+    const html = readFileSync(path.join(outDir, page), 'utf8');
+    for (const [, reference] of html.matchAll(HTML_REFERENCE)) {
+      if (reference.startsWith('#') || reference.startsWith('data:')) continue;
+      if (/^(?:[a-z]+:)?\/\//i.test(reference)) throw new Error(`${page} cere o resursă externă: ${reference}`);
+      if (!existsSync(path.resolve(outDir, path.dirname(page), reference.split('#')[0]))) throw new Error(`${page} cere ${reference}, dar fișierul lipsește din ${outDir}`);
+    }
   }
 }
 
@@ -122,6 +123,8 @@ export function build({
   }
   const config = Object.fromEntries(Object.entries(CONFIG_FILES).map(([key, name]) => [key, JSON.parse(readText(path.join(projectRoot, 'config', name)))]));
   writeDefaultExport(path.join(outDir, 'generat', 'config.js'), config);
+  writeDefaultExport(path.join(outDir, 'generat', 'shopping_config.js'), JSON.parse(readText(path.join(projectRoot, 'config', 'black-friday.json'))));
+  writeDefaultExport(path.join(outDir, 'generat', 'shopping_demo.js'), JSON.parse(readText(path.join(extensionDir, 'demo', 'shopping_source.json'))));
   writeDefaultExport(path.join(outDir, 'generat', 'raport_sursa.js'), {
     appName: manifest.name,
     template: readText(path.join(projectRoot, REPORT_TEMPLATE)),

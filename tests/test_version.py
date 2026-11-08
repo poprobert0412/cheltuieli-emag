@@ -1,9 +1,12 @@
-"""Testele versiunii programului (emag_spend/version.py): sursa unică, parsarea strictă și compararea X.Y.Z.
+"""Testele versiunii programului: coerența cu CHANGELOG.md, parsarea strictă și compararea X.Y.Z.
 
-Verifică: VERSION e o versiune validă și exact 1.0.0 la prima lansare (decis 5 oct. 2026, D1); parse_version acceptă doar
-„X.Y.Z” și „vX.Y.Z” (fără spații, sufixe, zerouri în față, cifre non-ASCII sau numere uriașe); is_newer compară numeric și
-refuză tot ce nu se parsează. Ce NU face: nu verifică eticheta git a lansării (asta e treaba lui lansare.yml și a testelor lui).
+Primește: VERSION și CHANGELOG.md; prima secțiune trebuie să descrie versiunea programului (D1, D16).
+Verifică: parse_version acceptă strict X.Y.Z și vX.Y.Z; is_newer compară numeric și refuză versiunile invalide.
+Ce NU face: nu fixează numărul unei lansări și nu verifică eticheta git (lansare.yml și testele lui).
 """
+
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 
 import pytest
 
@@ -17,9 +20,16 @@ def test_the_program_version_is_a_valid_x_y_z():
     assert parse_version("v" + VERSION) == parse_version(VERSION)
 
 
-def test_the_first_release_is_1_0_0():
-    """Versiunea curentă (prima lansare cu actualizări a fost 1.0.0, D1); la o lansare nouă testul se schimbă odată cu VERSION și CHANGELOG.md."""
-    assert VERSION == "1.0.2"
+def test_the_program_version_matches_the_first_changelog_section():
+    """VERSION coincide cu prima secțiune de versiune validă din CHANGELOG.md, citită cu parserul lansării."""
+    project_root = Path(__file__).resolve().parents[1]
+    spec = spec_from_file_location("changelog_section_for_version", project_root / ".github" / "scripts" / "changelog_section.py")
+    assert spec is not None and spec.loader is not None, "parserul CHANGELOG-ului nu poate fi încărcat"
+    parser = module_from_spec(spec)
+    spec.loader.exec_module(parser)
+    sections = parser.headings((project_root / "CHANGELOG.md").read_text(encoding="utf-8"))
+    assert sections, "CHANGELOG.md nu are nicio secțiune de versiune validă"
+    assert VERSION == sections[0][1], f"VERSION = {VERSION}, prima versiune din CHANGELOG.md = {sections[0][1]}"
 
 
 @pytest.mark.parametrize("text, expected", [

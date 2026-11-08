@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="partajat/dashboard.css">
 <link rel="stylesheet" href="partajat/app.css">
 <link rel="stylesheet" href="extensie.css">
+<link rel="stylesheet" href="cumparaturi/shopping.css">
 </head>
 <body>
 <a class="skip-link" href="#continut">Sari la conținut</a>
@@ -206,9 +207,9 @@
       <!-- „Șterge datele” (E4): doar la o analiză salvată, nu la raportul demonstrativ. Confirmarea stă în pagină, nu într-o fereastră confirm(). -->
       <div class="block block--end" id="data-block">
         <button class="btn btn--quiet" type="button" id="btn-delete-data" aria-expanded="false" aria-controls="delete-confirm">Șterge datele</button>
-        <p class="hint">Șterge din acest browser ultima analiză, jurnalul și cheia locală. Nu atinge nimic în contul tău <span translate="no">eMAG</span>. Fișierele descărcate se șterg separat.</p>
+        <p class="hint">Șterge din acest browser ultima analiză, jurnalul, lista de cumpărături, bugetele, etichetele și cheia locală. Nu atinge nimic în contul tău <span translate="no">eMAG</span>. Fișierele descărcate se șterg separat.</p>
         <form class="confirm" id="delete-confirm" hidden novalidate autocomplete="off">
-          <p>Ștergi analiza salvată? Cifrele, comenzile și retururile citite, jurnalul și cheia locală dispar din acest browser. Poți reface oricând analiza.</p>
+          <p>Ștergi toate datele salvate? Analiza, jurnalul, lista de cumpărături, bugetele, etichetele și cheia locală dispar din acest browser. Poți reface analiza; preferințele șterse nu se recuperează.</p>
           <p class="field__hint session__note" id="delete-msg" aria-live="polite"></p>
           <div class="actions">
             <button class="btn btn--danger" type="submit" id="btn-delete-confirm">Da, șterge datele</button>
@@ -218,6 +219,7 @@
       </div>
 
       <p class="status" id="report-status" role="status"></p>
+      <div id="shopping-root"></div>
       <div class="report" id="report-root"></div>
     </section>
 

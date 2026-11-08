@@ -2,6 +2,24 @@
 
 Ce s-a schimbat în fiecare versiune a extensiei Chrome „Cât am cheltuit pe eMAG”, cea mai nouă sus. Versiunea extensiei are o singură sursă, `manifest.json`, și nu e cea a programului (vezi [CHANGELOG.md](../CHANGELOG.md) din rădăcină). Fiecare versiune are o secțiune `## X.Y.Z — AAAA-LL-ZZ`.
 
+## 1.1.0 — 2026-11-08
+
+- Listă Black Friday cu ținte, selecție, buget și bilanț al intervalului editabil, cu ore în fusul Europe/Bucharest; începutul este inclus, sfârșitul este exclus.
+- Panou pe pagina de produs eMAG: preț curent, ultima cumpărare și minim personal, cu potrivire strictă după denumire; ținte salvate în listă.
+- Bugete lunare/anuale cu comenzile în curs separate, retururi de urmărit și etichete personale.
+- Bilanț anual PNG din previzualizare, cu opțiunea de ascundere a sumei.
+- Preferințele sunt criptate local, actualizate atomic între pagini și eliminate de „Șterge datele”; demo rămâne în memorie.
+- Permisiune nouă `sidePanel`, fără gazde noi; calculele raportului păstrează paritatea cu Python.
+
+## 1.0.0 — 2026-10-20
+
+Prima versiune stabilă, cu același comportament verificat în 0.1.0 și textele aprobate pe 16 octombrie 2026.
+
+- Numele rămâne „Cât am cheltuit pe eMAG”, creat de Robert Pop.
+- Analiza rulează local în browser, cu aceleași calcule ca programul Python.
+- Ultima analiză și jurnalul rămân criptate local; „Șterge datele” elimină datele și cheia.
+- Exporturile HTML, CSV, JSON și TXT rămân necriptate, iar raportul demonstrativ folosește date inventate, fără cont eMAG.
+
 ## 0.1.0 — 2026-10-16
 
 Prima versiune, pregătită pentru publicare sub licența GPL-3.0.

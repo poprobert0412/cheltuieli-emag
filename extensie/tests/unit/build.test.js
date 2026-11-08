@@ -29,7 +29,7 @@ const MAX_DESCRIPTION_CHARS = 132;
 // Cheile de manifest care ar lărgi suprafața extensiei (script pe pagini, resurse expuse paginilor, acces din afară, CSP schimbat): specificația §3 le interzice.
 const FORBIDDEN_MANIFEST_KEYS = [
   'content_scripts', 'web_accessible_resources', 'externally_connectable', 'optional_permissions', 'optional_host_permissions', 'content_security_policy',
-  'commands', 'omnibox', 'chrome_url_overrides', 'devtools_page', 'update_url', 'sandbox', 'declarative_net_request', 'side_panel',
+  'commands', 'omnibox', 'chrome_url_overrides', 'devtools_page', 'update_url', 'sandbox', 'declarative_net_request',
 ];
 
 const scratch = [];
@@ -54,16 +54,17 @@ describe('manifest: exact permisiunile din specificație (§3), fără nimic în
     assert.equal(MANIFEST.minimum_chrome_version, '120');
   });
 
-  test('permisiuni: exact „storage” și „scripting”; acces la gazde: exact https://www.emag.ro/*', () => {
-    assert.deepEqual([...MANIFEST.permissions].sort(), ['scripting', 'storage']);
+  test('permisiuni: storage, scripting și sidePanel aprobat pe 08.11.2026; gazda rămâne eMAG', () => {
+    assert.deepEqual([...MANIFEST.permissions].sort(), ['scripting', 'sidePanel', 'storage']);
     assert.deepEqual(MANIFEST.host_permissions, ['https://www.emag.ro/*']);
+    assert.deepEqual(MANIFEST.side_panel, { default_path: 'sidepanel.html' });
   });
 
   test('fără chei care ar lărgi extensia: content_scripts, web_accessible_resources, externally_connectable, CSP schimbat...', () => {
     for (const key of FORBIDDEN_MANIFEST_KEYS) assert.ok(!(key in MANIFEST), `manifestul are cheia interzisă ${key}`);
   });
 
-  test('clicul pe iconiță deschide direct fila aplicației: fără fereastră pop-up', () => {
+  test('clicul pe iconiță este gestionat de worker: fără fereastră pop-up', () => {
     assert.ok(!('default_popup' in MANIFEST.action));
     assert.equal(MANIFEST.background.service_worker, 'background.js');
     assert.equal(MANIFEST.background.type, 'module');
@@ -199,9 +200,9 @@ describe('aplicatie.html: fără scripturi inline, fără resurse externe, cu cl
     assert.deepEqual(missing, [], `clase fără regulă în CSS: ${missing.join(', ')}`);
   });
 
-  test('foile de stil sunt exact designul partajat (dashboard.css, app.css) și extensie.css, în ordinea în care se suprascriu', () => {
+  test('foile de stil păstrează designul partajat și adaugă ecranele de cumpărături', () => {
     const sheets = [...APP_HTML.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((match) => match[1]);
-    assert.deepEqual(sheets, ['partajat/dashboard.css', 'partajat/app.css', 'extensie.css']);
+    assert.deepEqual(sheets, ['partajat/dashboard.css', 'partajat/app.css', 'extensie.css', 'cumparaturi/shopping.css']);
   });
 
   test('scripturile pe care le cere pagina sunt exact cele din build: cele șase din partajat/ și modulul ecranelor', () => {
@@ -223,7 +224,7 @@ describe('build: dist/ și arhiva', () => {
 
   test('conține manifestul (identic cu sursa), worker-ul, pagina, iconițele, LICENSE și configurările generate', () => {
     assert.equal(sha256(path.join(out, 'manifest.json')), sha256(path.join(EXTENSION_DIR, 'manifest.json')));
-    for (const name of ['background.js', 'aplicatie.html', 'settings.js', 'LICENSE', 'generat/config.js', 'generat/raport_sursa.js', 'ecrane/main.js', 'colectare/work_tab.js', 'stocare/run_lock.js']) {
+    for (const name of ['background.js', 'aplicatie.html', 'sidepanel.html', 'settings.js', 'LICENSE', 'generat/config.js', 'generat/raport_sursa.js', 'generat/shopping_config.js', 'generat/shopping_demo.js', 'ecrane/main.js', 'colectare/work_tab.js', 'stocare/run_lock.js']) {
       assert.ok(existsSync(path.join(out, name)), `lipsește ${name}`);
     }
     for (const size of [16, 32, 48, 128]) assert.ok(existsSync(path.join(out, 'iconite', `icon-${size}.png`)));
@@ -335,6 +336,7 @@ describe('build: verificările opresc o extensie stricată', () => {
   function brokenCopy(change) {
     const root = tempDir('extensie-stricata');
     cpSync(path.join(EXTENSION_DIR, 'src'), path.join(root, 'src'), { recursive: true });
+    cpSync(path.join(EXTENSION_DIR, 'demo'), path.join(root, 'demo'), { recursive: true });
     cpSync(path.join(EXTENSION_DIR, 'manifest.json'), path.join(root, 'manifest.json'));
     change(root);
     return root;
@@ -352,6 +354,16 @@ describe('build: verificările opresc o extensie stricată', () => {
   test('o iconiță care lipsește oprește build-ul', () => {
     const root = brokenCopy((dir) => rmSync(path.join(dir, 'src', 'iconite', 'icon-48.png')));
     assert.throws(() => buildCopy(root), /icon-48\.png/);
+  });
+
+  test('panoul lateral și resursele lui lipsă opresc build-ul', () => {
+    const missingPage = brokenCopy((dir) => rmSync(path.join(dir, 'src', 'sidepanel.html')));
+    assert.throws(() => buildCopy(missingPage), /sidepanel\.html/);
+    const missingResource = brokenCopy((dir) => {
+      const file = path.join(dir, 'src', 'sidepanel.html');
+      writeFileSync(file, readFileSync(file, 'utf8').replace('partajat/app.css', 'lipsa.css'));
+    });
+    assert.throws(() => buildCopy(missingResource), /lipsa\.css/);
   });
 
   test('un script cerut de pagină care lipsește oprește build-ul', () => {

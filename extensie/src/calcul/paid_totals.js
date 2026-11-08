@@ -1,6 +1,6 @@
 // Banii plătiți efectiv: cifra principală a raportului, lanțul în bani plătiți și rândurile care nu sunt produse (portul lui emag_spend/paid_totals.py).
 // Primește: comenzile, registrul de linii (cu `paid_total_bani` de la line_ledger.js și retururile aplicate de return_matcher.js), retururile, raportul potrivirii și modurile de restituire.
-// Completează pe linii `credit_returned_qty`. Dă înapoi: PaidTotals = cheia `paid` din analiza.json + sumele pe ani + avertismentele (moduri de restituire necunoscute).
+// Completează pe linii `credit_returned_qty`. Dă înapoi: PaidTotals = cheia `paid` din analiza.json + sumele pe ani/comenzi + avertismentele (moduri de restituire necunoscute).
 // Reguli: plătit efectiv = „Total platit” al blocurilor livrate/ridicate − banii primiți înapoi la retururile lor + partea plătită a produselor returnate cu voucher sau sold din blocuri
 // marcate „anulat”; retur cu bani înapoi: se scade suma restituită afișată (fără sumă, cu produse nepotrivite sau întins pe blocuri cu stări diferite: partea plătită a produselor, estimare);
 // retur cu voucher sau sold: nu se scade nimic. Invariant verificat: produse păstrate + transport și taxe + retururi cu credit + diferențe la restituiri = plătit efectiv.
@@ -55,12 +55,13 @@ class YearTotals {
   }
 }
 
-/** Rezultatul: `summary` (cheia `paid` din analiza.json), sumele pe ani (Map: an -> YearTotals, în ordinea în care apar) și avertismentele găsite. */
+/** Rezultatul: summary și by_year pentru raport, by_order pentru intervale arbitrare, avertismentele găsite; atribuirea banilor se face o singură dată. */
 export class PaidTotals {
-  constructor(summary, byYear, warnings) {
+  constructor(summary, byYear, warnings, byOrder) {
     this.summary = summary;
     this.by_year = byYear;
     this.warnings = warnings;
+    this.by_order = byOrder;
   }
 
   /** Valoarea pe ani a unui rând care nu e produs (EXTRA_*), ca Map an -> bani. */
@@ -102,11 +103,17 @@ function sumOf(values) {
 export function computePaidTotals(orders, lines, returns, matchReport, modes) {
   markCreditReturns(lines, returns, modes);
   const years = new Map();
-  /** Totalurile anului; ca defaultdict(_Year), o primă citire creează intrarea (și anul apare apoi în by_year chiar cu zerouri). */
-  const yearTotals = (placedAt) => {
+  const ordersTotals = new Map(orders.map((order) => [order.order_id, Object.assign(new YearTotals(), {
+    in_progress_bani: 0, paid_only_bani: 0, unknown_blocks_bani: 0,
+  })]));
+  /** Aceeași atribuire se adună pe an și pe comandă; returul comun se împarte o singură dată înaintea filtrării perioadelor. */
+  const add = (orderId, placedAt, values) => {
     const year = yearOf(placedAt);
     if (!years.has(year)) years.set(year, new YearTotals());
-    return years.get(year);
+    for (const [key, amount] of Object.entries(values)) {
+      years.get(year)[key] += amount;
+      ordersTotals.get(orderId)[key] += amount;
+    }
   };
   const warnings = [];
   for (const ret of returns) {
@@ -117,12 +124,10 @@ export function computePaidTotals(orders, lines, returns, matchReport, modes) {
   const units = { ordered: 0, cancelled: 0, pending: 0, unknown: 0, kept: 0, returned: 0, credit: 0 };
   let listKept = 0;
   for (const line of lines.filter((candidate) => candidate.paid_only_qty === 0)) {
-    const year = yearTotals(line.placed_at);
-    year.ordered_bani += line.paid_value_bani;
-    year.cancelled_bani += line.cancelled_paid_bani;
-    year.pending_bani += line.pending_paid_bani;
-    year.unknown_bani += line.unknown_paid_bani;
-    year.kept_bani += line.kept_paid_bani;
+    add(line.order_id, line.placed_at, {
+      ordered_bani: line.paid_value_bani, cancelled_bani: line.cancelled_paid_bani,
+      pending_bani: line.pending_paid_bani, unknown_bani: line.unknown_paid_bani, kept_bani: line.kept_paid_bani,
+    });
     listKept += line.kept_list_bani;
     units.ordered += line.qty;
     units.cancelled += line.cancelled_qty;
@@ -143,17 +148,20 @@ export function computePaidTotals(orders, lines, returns, matchReport, modes) {
       const payment = blockPayment(block);
       if (block.status === DELIVERED) {
         paidDelivered += payment.paid_bani;
-        yearTotals(order.placed_at).fees_bani += payment.fees_bani;
+        add(order.order_id, order.placed_at, { fees_bani: payment.fees_bani });
         if (payment.source === PAID_FROM_COMPONENTS) {
           rebuiltBlocks += 1;
           rebuiltBani += payment.paid_bani;
         }
       } else if (block.status === IN_PROGRESS) {
         outside.in_progress_bani += payment.paid_bani;
+        ordersTotals.get(order.order_id).in_progress_bani += payment.paid_bani;
       } else if (block.status === PAID_ONLY) {
         outside.paid_only_bani += payment.paid_bani;
+        ordersTotals.get(order.order_id).paid_only_bani += payment.paid_bani;
       } else if (block.status === UNKNOWN) {
         outside.unknown_bani += payment.paid_bani;
+        ordersTotals.get(order.order_id).unknown_blocks_bani += payment.paid_bani;
       }
     }
   }
@@ -171,12 +179,12 @@ export function computePaidTotals(orders, lines, returns, matchReport, modes) {
     const onDelivered = sumOf(delivered.map((part) => part.paid_bani));
     const onElsewhere = sumOf(elsewhere.map((part) => part.paid_bani));
     if (ret !== null && modes.isCredit(ret.refund_mode)) {
-      for (const part of parts) yearTotals(part.line.placed_at).credit_bani += part.paid_bani; // banii n-au revenit în cont: rămân cheltuiți, pe anul comenzii
+      for (const part of parts) add(part.line.order_id, part.line.placed_at, { credit_bani: part.paid_bani }); // banii n-au revenit în cont: rămân cheltuiți, pe anul comenzii
       refunds.credit_on_delivered_bani += onDelivered;
       refunds.credit_added_bani += onElsewhere;
       continue;
     }
-    for (const part of elsewhere) yearTotals(part.line.placed_at).returned_bani += part.paid_bani; // bloc marcat „anulat”: plata și restituirea se anulează reciproc
+    for (const part of elsewhere) add(part.line.order_id, part.line.placed_at, { returned_bani: part.paid_bani }); // bloc marcat „anulat”: plata și restituirea se anulează reciproc
     refunds.cancelled_cash_bani += onElsewhere;
     const shown = ret !== null ? ret.refund_bani : null;
     if (delivered.length === 0) {
@@ -189,9 +197,7 @@ export function computePaidTotals(orders, lines, returns, matchReport, modes) {
     const weights = delivered.map((part) => part.paid_bani);
     const shares = sumOf(weights) !== 0 ? splitProportionally(attributed, weights) : [attributed, ...new Array(delivered.length - 1).fill(0)];
     delivered.forEach((part, index) => {
-      const year = yearTotals(part.line.placed_at);
-      year.returned_bani += shares[index];
-      year.differences_bani += part.paid_bani - shares[index];
+      add(part.line.order_id, part.line.placed_at, { returned_bani: shares[index], differences_bani: part.paid_bani - shares[index] });
     });
     refunds.cash_bani += attributed;
     if (!exact) {
@@ -260,5 +266,5 @@ export function computePaidTotals(orders, lines, returns, matchReport, modes) {
       unattributed_refunds_bani: refunds.unattributed_bani + matchReport.unmatched_refund_bani,
     },
   };
-  return new PaidTotals(summary, years, warnings);
+  return new PaidTotals(summary, years, warnings, ordersTotals);
 }

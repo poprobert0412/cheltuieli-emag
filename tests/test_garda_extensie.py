@@ -1,7 +1,7 @@
 """Garda extensiei Chrome: permisiunile din manifest, ce are voie codul din extensie/src și ce caractere sunt în extensie/.
 
 Primește: extensie/manifest.json, extensie/src/** (JS, HTML, CSS) și tot ce urcă în git din extensie/ (tests.garda_support.files_to_publish).
-Verifică: (1) manifestul cere exact permisiunile `storage` și `scripting` și accesul la https://www.emag.ro/*, fără scripturi de conținut, resurse accesibile din web, conectare externă sau politică de conținut proprie;
+Verifică: (1) manifestul cere exact `storage`, `scripting`, `sidePanel` și accesul la https://www.emag.ro/*, fără scripturi de conținut, resurse accesibile din web, conectare externă sau politică de conținut proprie;
 (2) în JS: `fetch` doar în colectare/page_functions.js, fără alte căi de rețea sau de cod dinamic (XMLHttpRequest, WebSocket, eval, innerHTML, chrome.cookies...), adrese în literale doar https://www.emag.ro, importuri doar relative;
 (3) în HTML: fără script inline și fără resurse de pe alte gazde; în CSS: fără @import sau url() către alte gazde; (4) în tot extensie/ (fără node_modules, dist, build): fără caractere invizibile, fără NBSP și fără litere cu sedilă;
 (5) nimic din extensie/ nu e ignorat de git în tăcere. Fiecare detector e probat pe un cod-capcană care trebuie să pice (și pe cod curat care nu trebuie să pice).
@@ -31,7 +31,8 @@ GIT_TIMEOUT_SECONDS = 60
 # ---------- manifest ----------
 
 MANIFEST_VERSION = 3
-ALLOWED_PERMISSIONS = ["scripting", "storage"]
+# Panoul lateral a fost aprobat de Robert pe 08.11.2026; nu extinde lista gazdelor.
+ALLOWED_PERMISSIONS = ["scripting", "sidePanel", "storage"]
 ALLOWED_HOST_PERMISSIONS = ["https://www.emag.ro/*"]
 # Chei de manifest interzise, cu motivul (specificația §3 și §12): fiecare ar lărgi ce poate face extensia dincolo de citirea paginilor din fila de lucru.
 FORBIDDEN_MANIFEST_KEYS = {
@@ -45,7 +46,7 @@ FORBIDDEN_MANIFEST_KEYS = {
 }
 # Singurele chei de nivel superior folosite azi. O cheie nouă (comenzi, pagini de înlocuire, panou lateral...) cere o verificare manuală și intrarea aici.
 ALLOWED_MANIFEST_KEYS = frozenset({
-    "manifest_version", "name", "description", "version", "minimum_chrome_version", "permissions", "host_permissions", "background", "action", "icons",
+    "manifest_version", "name", "description", "version", "minimum_chrome_version", "permissions", "host_permissions", "background", "action", "icons", "side_panel",
 })
 ALLOWED_BACKGROUND_KEYS = frozenset({"service_worker", "type"})
 
@@ -69,6 +70,8 @@ def manifest_problems(manifest: object) -> list[str]:
         if key not in ALLOWED_MANIFEST_KEYS and key not in FORBIDDEN_MANIFEST_KEYS:
             problems.append(f"cheie necunoscută în manifest: «{key}». Verifică ce permite și adaug-o în ALLOWED_MANIFEST_KEYS doar dacă nu lărgește accesul extensiei")
     background = manifest.get("background")
+    if manifest.get("side_panel") != {"default_path": "sidepanel.html"}:
+        problems.append("side_panel trebuie să conțină exact default_path: sidepanel.html")
     if not isinstance(background, dict) or not set(background) <= ALLOWED_BACKGROUND_KEYS or not isinstance(background.get("service_worker"), str):
         problems.append(f"background = {background!r}: trebuie un service_worker (și opțional type), nimic altceva")
     return problems
@@ -395,7 +398,8 @@ def test_nothing_in_the_extension_is_silently_ignored_by_git():
 
 CLEAN_MANIFEST = {
     "manifest_version": 3, "name": "Test", "description": "Test", "version": "1.0.0", "minimum_chrome_version": "120",
-    "permissions": ["storage", "scripting"], "host_permissions": ["https://www.emag.ro/*"],
+    "permissions": ["storage", "scripting", "sidePanel"], "host_permissions": ["https://www.emag.ro/*"],
+    "side_panel": {"default_path": "sidepanel.html"},
     "background": {"service_worker": "background.js", "type": "module"}, "action": {"default_title": "Test"}, "icons": {"16": "i.png"},
 }
 
@@ -403,7 +407,7 @@ CLEAN_MANIFEST = {
 def test_manifest_detector_accepts_the_expected_manifest():
     """Fals pozitiv: un manifest cu exact permisiunile cerute nu e o încălcare (și ordinea permisiunilor nu contează)."""
     assert manifest_problems(CLEAN_MANIFEST) == []
-    assert manifest_problems({**CLEAN_MANIFEST, "permissions": ["scripting", "storage"]}) == []
+    assert manifest_problems({**CLEAN_MANIFEST, "permissions": ["sidePanel", "scripting", "storage"]}) == []
 
 
 @pytest.mark.parametrize("change, expected", [
@@ -418,7 +422,9 @@ def test_manifest_detector_accepts_the_expected_manifest():
     ({"externally_connectable": {"matches": ["https://*/*"]}}, "externally_connectable"),
     ({"content_security_policy": {"extension_pages": "script-src 'self' 'unsafe-eval'"}}, "content_security_policy"),
     ({"optional_permissions": ["tabs"]}, "optional_permissions"), ({"optional_host_permissions": ["<all_urls>"]}, "optional_host_permissions"),
-    ({"update_url": "https://exemplu.invalid/updates.xml"}, "update_url"), ({"commands": {"x": {}}}, "cheie necunoscută"), ({"side_panel": {}}, "cheie necunoscută"),
+    ({"update_url": "https://exemplu.invalid/updates.xml"}, "update_url"), ({"commands": {"x": {}}}, "cheie necunoscută"),
+    ({"side_panel": {}}, "side_panel"), ({"side_panel": {"default_path": "https://exemplu.invalid/"}}, "side_panel"),
+    ({"side_panel": {"default_path": "sidepanel.html", "extra": True}}, "side_panel"),
     ({"background": {"scripts": ["a.js"]}}, "background"), ({"background": {"service_worker": "a.js", "persistent": True}}, "background"),
 ])
 def test_manifest_detector_catches_trap_manifests(change, expected):

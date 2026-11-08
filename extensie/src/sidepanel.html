@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f3f0">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e1114">
+<title>În cumpărăturile tale · eMAG</title>
+<script src="partajat/app-theme.js"></script>
+<link rel="stylesheet" href="partajat/app.css">
+<link rel="stylesheet" href="panou/sidepanel.css">
+</head>
+<body>
+<header class="panel-head"><span class="panel-brand">Cât am cheltuit pe <span translate="no">eMAG</span></span><button type="button" id="theme-toggle"><span id="theme-label">Temă: automată</span></button></header>
+<main id="panel">
+<h1>În cumpărăturile tale</h1>
+<p id="panel-status" role="status">Deschide un produs eMAG și apasă Citește produsul.</p>
+<button id="read-product" type="button">Citește produsul</button>
+<section id="product" hidden aria-label="Produsul curent">
+<p id="product-name"></p>
+<p class="match-badge" id="match-label" hidden>Potrivire după denumire</p>
+<div class="current-price"><p class="eyebrow">Prețul de acum</p><p id="current-price" class="price"></p><p id="difference"></p></div>
+<dl class="history"><div><dt>Ultima dată</dt><dd id="last-price"></dd></div><div><dt>Minimul tău</dt><dd id="minimum-price"></dd></div></dl>
+<p class="panel-note">Preț pe produs, fără transport. Istoric personal, nu minim de piață.</p>
+<p class="panel-note" id="analysis-date"></p>
+<form id="target-form" novalidate><label for="target-price">Prețul-țintă</label><div class="target-controls"><input id="target-price" inputmode="decimal" type="text" required><button type="submit">Salvează ținta</button></div><p id="target-message" role="status"></p></form>
+</section>
+<button class="report-link" id="open-report" type="button">Deschide raportul complet</button>
+</main>
+<script type="module" src="panou/sidepanel.js"></script>
+</body>
+</html>

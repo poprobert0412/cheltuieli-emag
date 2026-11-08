@@ -82,13 +82,16 @@ Detalii: [docs/INSTALARE.md](docs/INSTALARE.md#actualizare).
 **Cât am cheltuit pe eMAG — în pregătire pentru publicare.** Aceeași analiză, ca extensie pentru Chrome: fără Python, arhivă sau lansatoare, iar analiza rulează în browserul tău. Extensia nu e publicată încă în Chrome Web Store; după publicare, o instalezi cu butonul de instalare din pagina ei de acolo, apoi apeși iconița extensiei și **Pornește analiza**.
 
 - Citește aceleași pagini din contul tău, dintr-o filă eMAG pe care o deschide în fundal. Te loghezi tu; parola și codul 2FA nu trec prin extensie.
-- Nu trimite istoricul cumpărăturilor autorului: fără server al autorului, cont sau telemetrie. Păstrează criptat în browser ultima analiză și jurnalul; „Șterge datele” elimină și cheia locală. Fișierele descărcate sunt necriptate și se șterg separat.
+- Nu trimite istoricul cumpărăturilor autorului: fără server al autorului, cont sau telemetrie. Păstrează criptat în browser ultima analiză, jurnalul, lista de produse, bugetele și etichetele; „Șterge datele” elimină și cheia locală. Fișierele descărcate sunt necriptate și se șterg separat.
+- Include listă și bilanț Black Friday, bugete lunare/anuale, retururi de urmărit, etichete personale și bilanț anual PNG cu suma ascunsă opțional. Pe o pagină de produs, iconița deschide panoul cu istoricul personal și prețul-țintă. [Folosirea funcțiilor noi](docs/FUNCTII-CUMPARATURI.md).
 - Are temă automată, luminoasă și întunecată; alegerea se păstrează la redeschidere.
 - Calculul e portat din program și comparat automat cu el, pe aceleași intrări; pe contul autorului, la 14 oct. 2026, extensia a citit și a calculat aceleași cifre ca programul. Programul Python rămâne referința.
 - Deocamdată doar Chrome 120 sau mai nou, doar emag.ro, doar în română, fără regulile personale de categorii.
 - La fel ca programul: neafiliată cu eMAG, iar accesul automat la cont poate fi contrar termenilor eMAG; o folosești pe răspunderea ta, doar pe contul tău.
 
 Ce citește, ce păstrează și cum ștergi: [politica de confidențialitate a extensiei](docs/CONFIDENTIALITATE-EXTENSIE.md). Securitate: [SECURITY.md](SECURITY.md#extensia-chrome). Cum o construiești și o testezi din cod: [CONTRIBUTING.md](CONTRIBUTING.md#extensia-chrome).
+
+Versiunea 1.1.0 din 8 noiembrie a trecut acceptanța pe cont real pentru cele șase funcții, cu aceeași colectare și aceleași calcule ca Python. Pentru publicare este pregătit [addendumul de confidențialitate și magazin](docs/aprobare-confidentialitate-2026-11-08.md), încă propus; [pașii lansării](docs/handoff/2026-11-08-lansare-extensie.md) separă publicarea codului de trimiterea în Chrome Web Store.
 
 ## Limitări
 

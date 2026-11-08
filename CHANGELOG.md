@@ -4,6 +4,14 @@ Ce s-a schimbat în fiecare versiune a programului Cheltuieli eMAG, cea mai nou�
 `## X.Y.Z — AAAA-LL-ZZ`, scrisă înainte de lansare: textul ei apare în pagina lansării de pe GitHub și în aplicație, la
 „Ce e nou”, ca text simplu (fără formatare), deci rândurile ei sunt fraze scurte, fără titluri `##`.
 
+## 1.1.0 — 2026-10-20
+
+- Extensia Chrome analizează comenzile și retururile local, în browser, cu aceleași calcule ca programul Python, fără instalarea aplicației pentru calculator.
+- În extensie, ultima analiză și jurnalul se păstrează criptat, iar „Șterge datele” elimină datele și cheia locală.
+- Instrucțiunile din raport și din exportul HTML se adaptează contextului: aplicația pentru calculator sau extensia.
+- Extensia oferă exporturi HTML, CSV, JSON și jurnal, plus un raport demonstrativ cu date inventate, fără cont eMAG.
+- La actualizare, rapoartele tale și sesiunea eMAG rămân neatinse, iar regulile din config/categorii.personal.json rămân; modificările făcute direct în config/categorii.json se pierd la actualizare.
+
 ## 1.0.2 — 2026-10-07
 
 Reparații. Cuprinde tot ce era în 1.0.1, o versiune care n-a fost oferită nimănui.

@@ -1,6 +1,6 @@
 # Politica de confidențialitate: Cât am cheltuit pe eMAG
 
-Ultima actualizare: 16 octombrie 2026. Se aplică extensiei Chrome, versiunea 0.1.0. Text aprobat de Robert pe 16 octombrie 2026 (E20).
+Ultima actualizare: 20 octombrie 2026. Se aplică extensiei Chrome, versiunea 1.0.0. Text aprobat de Robert pe 16 octombrie 2026 (E20). Practicile descrise sunt neschimbate.
 
 **Cât am cheltuit pe eMAG** este un proiect independent al lui Robert Pop, gratuit pentru utilizator. Nu este afiliat cu eMAG. Contactul și raportarea problemelor sunt disponibile în [depozitul proiectului](https://github.com/poprobert0412/cheltuieli-emag); nu publica acolo comenzi sau fișiere cu datele tale. Vulnerabilitățile se raportează conform SECURITY.md. <!-- temei: docs/DECIZII.md E15/E20; extensie/src/aplicatie.html antet/subsol; SECURITY.md -->
 

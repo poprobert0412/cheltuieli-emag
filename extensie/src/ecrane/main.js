@@ -1,7 +1,7 @@
 // Pornește pagina aplicației: leagă ecranele între ele și hotărăște pe care îl arată (portul lui app-main.js și al mașinii de stări din app-state.js, fără serverul local).
 // Primește: nimic din afară; la deschidere întreabă lacătul (rulează o analiză în altă filă?) și stocarea (există o analiză salvată?). Dă înapoi: nimic; desenează ecranele.
-// Ecranele: loading, busy, ready, login, working, done (raportul salvat sau demonstrativ), error, cancelled. Parserele, analiza și exporturile se încarcă abia la „Pornește analiza” sau la descărcare,
-// deci pagina pornește repede, iar demo-ul nu le încarcă. Ce NU face: nu citește pagini eMAG (rulare/run_pipeline.js) și nu desenează nimic din conținutul ecranelor (fiecare fișier din ecrane/ își desenează ecranul lui).
+// Ecranele: loading, busy, ready, login, working, done (raportul salvat sau demonstrativ), error, cancelled. Parserele și exporturile se încarcă la folosire;
+// analiza este reutilizată și de ecranele de cumpărături. Nu citește pagini eMAG și nu desenează conținutul ecranelor.
 import { PHASE_WAITING_LOGIN, Progress, RunCancelled } from '../colectare/progress.js';
 import { CODE_BUSY, classifyError } from '../colectare/run_errors.js';
 import { showTab } from '../colectare/work_tab.js';
@@ -9,6 +9,7 @@ import { downloadText } from '../exporturi/descarcare.js';
 import { mimeTypeOf } from '../exporturi/export_files.js';
 import { runPipeline } from '../rulare/run_pipeline.js';
 import { deleteAllData, loadLastAnalysis } from '../stocare/last_analysis.js';
+import shoppingDefaults from '../generat/shopping_config.js';
 import { isRunActive, sweepStaleRecord } from '../stocare/run_lock.js';
 import { RunLog, loadSavedRunLog } from '../stocare/run_log.js';
 import { StorageEncryptionError } from '../stocare/storage_encryption.js';
@@ -19,8 +20,9 @@ import { initDownloadButtons } from './download_buttons.js';
 import { initErrorScreen, renderError, setLogMessage } from './error_screen.js';
 import { initFaqLinks } from './faq_links.js';
 import { enterLogin, initLoginScreen, setShowTabEnabled } from './login_screen.js';
-import { hideReport, initReportScreen, showDataDeletionOnError, showReport } from './report_screen.js';
+import { hideReport, initReportScreen, showDataDeletionOnError, showDataDeletionOnStart, showReport } from './report_screen.js';
 import { currentScreen, initScreens, showScreen } from './screens.js';
+import { watchSavedAnalysis } from './saved_analysis_watch.js';
 import {
   initStartScreen, showDeletedNote, showLastAnalysis, showStartError,
 } from './start_screen.js';
@@ -50,20 +52,25 @@ function showReady() {
   showLastAnalysis(state.lastEntry);
   state.report = null;
   go('ready');
+  showDataDeletionOnStart(true);
 }
 
 /** Raportul ultimei analize salvate. Ecranul se arată întâi, ca graficele să-și măsoare locul vizibil. */
 function showSavedReport() {
   state.report = { kind: 'saved' };
   go('done');
-  showReport({ kind: 'saved', summary: state.lastEntry.summary, createdAt: state.lastEntry.created_at });
+  showReport({ kind: 'saved', summary: state.lastEntry.summary, createdAt: state.lastEntry.created_at, entry: state.lastEntry, defaults: shoppingDefaults });
 }
 
 /** Raportul demonstrativ (comenzi inventate, gata calculat în demo-data.js): nu citește nimic din cont și nu se salvează. */
-function showDemoReport() {
-  state.report = { kind: 'demo' };
+async function showDemoReport() {
+  const report = { kind: 'demo' };
+  state.report = report;
   go('done');
-  showReport({ kind: 'demo', summary: window.EMAG_DEMO_DATA, createdAt: null });
+  const { default: raw } = await import('../generat/shopping_demo.js');
+  if (state.report !== report || currentScreen() !== 'done') return;
+  const entry = { ...raw, summary: window.EMAG_DEMO_DATA, threshold_lei: window.EMAG_DEMO_DATA.meta.threshold_bani / 100, created_at: window.EMAG_DEMO_DATA.meta.generated_at };
+  showReport({ kind: 'demo', summary: entry.summary, createdAt: null, entry, defaults: shoppingDefaults });
 }
 
 /** Ce raport se arată acum, în forma cerută de descărcări; null dacă nu e niciunul. */
@@ -224,7 +231,7 @@ async function boot() {
   showVersion();
   initStartScreen({
     onStart: (thresholdLei) => startAnalysis(thresholdLei),
-    onDemo: () => showDemoReport(),
+    onDemo: () => showDemoReport().catch((error) => showFailure(error)),
     onOpenLast: () => { if (state.lastEntry) showSavedReport(); },
   });
   initLoginScreen({ onShowTab: showWorkTab, onCancel: cancelRun });
@@ -237,6 +244,26 @@ async function boot() {
   initErrorScreen({ onBack: () => { showDeletedNote(''); showReady(); }, onDownloadLog: () => downloadSavedLog('screen-error') });
   initCancelledScreen({ onBack: () => { showDeletedNote(''); showReady(); }, onDownloadLog: () => downloadSavedLog('screen-cancelled') });
   initBusyScreen({ isStillBusy: isRunActive, onFree: () => routeAtStart().catch((error) => showFailure(error)) });
+  let refreshReport = false;
+  const stopWatch = watchSavedAnalysis({
+    canReload: () => state.run === null,
+    onInvalidate: () => {
+      refreshReport = refreshReport || state.report?.kind === 'saved';
+      state.lastEntry = null;
+      if (refreshReport) { state.report = null; go('loading'); }
+      else if (currentScreen() === 'ready') showLastAnalysis(null);
+    },
+    onLoad: (entry) => {
+      state.lastEntry = entry;
+      if (refreshReport) {
+        refreshReport = false;
+        if (entry) showSavedReport();
+        else showReady();
+      } else if (currentScreen() === 'ready') showLastAnalysis(entry);
+    },
+    onError: (error) => { refreshReport = false; showFailure(error); },
+  });
+  window.addEventListener('pagehide', stopWatch, { once: true });
   const tab = await chrome.tabs.getCurrent();
   state.appTabId = tab ? tab.id : null;
   try {

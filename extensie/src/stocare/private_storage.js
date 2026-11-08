@@ -1,5 +1,5 @@
 // Persistența privată: leagă cheia IndexedDB, AES-GCM și commitul atomic al unei intrări chrome.storage.local.
-// Primește zona de stocare și date JSON validate; oferă citire, scriere, ștergere și generații pentru jurnal.
+// Primește zona de stocare și date JSON validate; oferă citire, scriere, actualizare atomică, ștergere și generații pentru jurnal.
 // Toată operația ține același Web Lock între file, inclusiv migrarea schema1 și ștergerea; o generație veche nu poate rescrie date șterse.
 // Migrarea înlocuiește plaintext doar după criptare și printr-un singur set; la eșec intrarea veche rămâne și se raportează eroare.
 // Nu validează analiza sau jurnalul (validatorul vine de la consumator) și nu exportă ori regenerează chei la citirea ciphertextului.
@@ -76,6 +76,28 @@ export function createPrivateStorage({ keyStore = createKeyStore(), locks = null
     });
   }
 
+  /** Citește, modifică și criptează sub un singur lacăt; mutatorul nu trebuie să reintre în persistență. */
+  async function update(storage, name, validate, mutator, expectedGeneration = generation(storage)) {
+    const expected = await expectedGeneration;
+    return exclusive(async (state) => {
+      checkGeneration(state, expected);
+      const stored = (await storage.get(name))?.[name];
+      let current = null;
+      if (stored !== undefined) {
+        if (isEncryptedRecord(stored)) {
+          if (state.key === null) throw new StorageEncryptionError('cheia locală a datelor criptate lipsește');
+          current = await decryptRecord(stored, state.key, name, provider());
+        } else current = stored;
+        if (!validate(current)) throw new StorageEncryptionError('datele decriptate nu au forma așteptată');
+      }
+      const next = await mutator(current);
+      if (!validate(next)) throw new StorageEncryptionError('datele de salvat nu au forma așteptată');
+      const key = await ensureKey(state, storage);
+      await storage.set({ [name]: await encryptRecord(next, key, name, provider()) });
+      return next;
+    });
+  }
+
   /** Scoate o intrare fără să atingă cheia comună; o filă veche nu poate șterge jurnalul unei generații noi. */
   async function remove(storage, name) {
     const expected = await generation(storage);
@@ -96,7 +118,7 @@ export function createPrivateStorage({ keyStore = createKeyStore(), locks = null
     });
   }
 
-  return { read, write, remove, clear, generation };
+  return { read, write, update, remove, clear, generation };
 }
 
 export const privateStorage = createPrivateStorage();

@@ -1,5 +1,7 @@
 # Chrome Web Store: texte, formular de date și ghid de publicare
 
+**8 noiembrie 2026 — versiunea 1.1.0:** cele șase funcții aprobate adaugă panoul `sidePanel`, lista, țintele, bugetele, etichetele și exportul PNG. Câmpurile de mai jos descriu versiunea aprobată anterior; nu se copiază nemodificate pentru noul pachet. [Addendumul propus](aprobare-confidentialitate-2026-11-08.md) conține textele și justificările actualizate. Commit/push sunt autorizate după testele pe cont real; pașii rămași pentru publicarea oficială sunt în [predarea lansării](handoff/2026-11-08-lansare-extensie.md).
+
 Materialele pentru extensia **Cât am cheltuit pe eMAG**: numele, descrierile, justificările, răspunsurile din formularul de date, instrucțiunile pentru recenzent, imaginile și ghidul de publicare. Starea la 16 oct. 2026: identitatea, plăcuța 2 cu slogan, modul întunecat obligatoriu, criptarea locală, descrierile, politica și corecturile de interfață sunt **aprobate** (E15–E20). Robert a cerut lansare **publică de la început** (E21) și a autorizat asistentul să facă publicarea (E22). Sursele oficiale de mai jos au fost citite pe 14 oct. 2026; etichetele dashboard-ului se verifică la completare.
 
 Ce vede publicul (numele, descrierile) e în română: extensia și magazinul sunt doar în română. Câmpurile pe care le citesc doar recenzenții (scopul unic, justificările, codul de la distanță, instrucțiunile) sunt date în engleză, ca să se lipească direct în dashboard, cu explicația în română alături. Politica de confidențialitate: [CONFIDENTIALITATE-EXTENSIE.md](CONFIDENTIALITATE-EXTENSIE.md).
@@ -213,7 +215,7 @@ Pagina oficială ([Trader disclosure](https://developer.chrome.com/docs/webstore
 | Site-ul extensiei | `https://github.com/poprobert0412/cheltuieli-emag` | Codul și documentația |
 | Adresa de suport | `https://github.com/poprobert0412/cheltuieli-emag/issues` | Fără numere de comandă în mesaje |
 | Politica de confidențialitate | adresa din §7 | |
-| Versiunea | 0.1.0 | Din `extensie/manifest.json` (E8); fiecare urcare nouă cere o versiune mai mare |
+| Versiunea | 1.0.0 | Din `extensie/manifest.json` (E8); fiecare urcare nouă cere o versiune mai mare |
 
 ## 13. Ghid pas cu pas
 
@@ -229,7 +231,7 @@ Etichetele din dashboard pot diferi puțin de cele de aici (interfața o ține G
 - Costă: nu. Google poate cere mai târziu verificarea declarației. **Îmi trimiți:** „gata”.
 
 **Pasul 3 [C]. Arhiva**
-- Construiesc și verific arhiva `extensie/dist/cheltuieli-emag-0.1.0.zip`: `npm run verify` în `extensie/` (teste, paritate, construire, e2e), apoi arhiva are `manifest.json` în rădăcină, versiunea 0.1.0 și doar permisiunile de la §5. Arhiva se construiește în CI sau local; asistentul este autorizat s-o încarce și s-o trimită la recenzie (E22 înlocuiește operarea manuală din E11).
+- Construiesc și verific arhiva `cheltuieli-emag-1.1.0.zip`: `npm run verify` în `extensie/` (teste, paritate, construire, e2e), apoi arhiva are `manifest.json` în rădăcină, versiunea 1.1.0 și permisiunile descrise în addendumul actual. Pachetul local verificat este în `extensie/build/functii-2026-11-08/`; CI îl produce în `extensie/dist/`. E22 autorizează operarea publicării; completările de transparență ale noilor funcții așteaptă aprobarea înaintea trimiterii.
 - Dacă iau arhiva din CI, GitHub împachetează artefactul într-un ZIP: dezarhivezi și urci ZIP-ul din interior, nu pe cel exterior.
 
 **Pasul 4 [C]. Elementul nou**
