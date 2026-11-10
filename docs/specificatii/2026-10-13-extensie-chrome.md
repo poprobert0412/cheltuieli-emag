@@ -25,7 +25,7 @@ Seria „E” (extensia) e nouă; rândurile decise intră în `docs/DECIZII.md`
 | E8 | 13.10.2026 | Versiunea extensiei are o singură sursă, `extensie/manifest.json`, separată de versiunea programului. | decis de Robert |
 | E9 | 13.10.2026 | Istoric: propunerea cerea „neoficial” în nume și nu folosea sigla eMAG. Înlocuită de E15 pe 16.10.2026; nu se mai impune „neoficial” în nume. | depășit explicit de E15 |
 | E15 | 16.10.2026 | Numele exact: „Cât am cheltuit pe eMAG”, fără „neoficial” în nume; autor Robert Pop. Mențiunea descriptivă de neafiliere și lipsa siglei eMAG rămân. | decis de Robert |
-| E10 | 13.10.2026 | Declarația din magazin: non-trader (persoană fizică, fără bani din extensie). | decis de Robert |
+| E10 | 13.10.2026 | Declarația din magazin: non-trader (persoană fizică, fără bani din extensie). Înlocuită de E28 pe 10.11.2026: trader, sub marca Snow Globe Solutions (`docs/DECIZII.md`). | decis de Robert |
 | E11 | 13.10.2026 | Istoric: Robert urca manual arhiva din CI; E22 din 16.10.2026 autorizează asistentul să publice și să trimită extensia în magazin. | depășit explicit de E22 |
 | E12 | 14.10.2026 | Diferența lxml / HTML5 la o entitate fără „;” e acceptată: extensia o decodează, ca pagina văzută de om; testul o fixează exact. | decis de Robert |
 | E13 | 14.10.2026 | Iconița: bonul aplicației pe un pătrat deschis cu colțuri rotunjite (varianta B), vizibil și pe bara întunecată. | decis de Robert |
@@ -192,7 +192,8 @@ Fără ea, o diferență mică de port dă cifre greșite care arată normal. Me
   fizică; nu e site de prezentare, magazin, aplicație cu abonament, chatbot sau aplicație de sănătate. Autorul nu primește
   date personale, iar politica o spune explicit. Interpretare (nu text de lege): CRA nu se aplică software-ului liber
   nemonetizat (considerentul 18 al Reg. (UE) 2024/2847); se reevaluează dacă apar donații sau bani din extensie. Declarația
-  de non-trader (E10) are același temei: fără scop comercial.
+  de non-trader (E10) are același temei: fără scop comercial. Actualizare 10.11.2026 (E28): extensia se publică sub marca
+  Snow Globe Solutions, ca trader; rămâne gratuită și nemonetizată, iar încadrarea CRA se reevaluează dacă apare vreun câștig din ea.
 
 ## 9. CI și construire
 

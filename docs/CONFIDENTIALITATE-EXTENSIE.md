@@ -2,7 +2,7 @@
 
 Ultima actualizare: 10 noiembrie 2026. Se aplică extensiei Chrome, versiunea 1.1.0. Text aprobat de Robert pe 16 octombrie 2026 (E20), cu completările pentru funcțiile de cumpărături aprobate pe 10 noiembrie 2026 (E26).
 
-**Cât am cheltuit pe eMAG** este un proiect independent al lui Robert Pop, gratuit pentru utilizator. Nu este afiliat cu eMAG. Contactul și raportarea problemelor sunt disponibile în [depozitul proiectului](https://github.com/poprobert0412/cheltuieli-emag); nu publica acolo comenzi sau fișiere cu datele tale. Vulnerabilitățile se raportează conform SECURITY.md. <!-- temei: docs/DECIZII.md E15/E20; extensie/src/aplicatie.html antet/subsol; SECURITY.md -->
+**Cât am cheltuit pe eMAG** este un proiect creat de Robert Pop și publicat sub marca Snow Globe Solutions de POP M. D. ROBERT PERSOANĂ FIZICĂ AUTORIZATĂ (CUI 55776662), gratuit pentru utilizator. Nu este afiliat cu eMAG. Contactul și raportarea problemelor sunt disponibile în [depozitul proiectului](https://github.com/poprobert0412/cheltuieli-emag); nu publica acolo comenzi sau fișiere cu datele tale. Vulnerabilitățile se raportează conform SECURITY.md. <!-- temei: GDPR art. 13 alin. 1 lit. a (identitatea celui care publică); docs/DECIZII.md E15/E20/E28; extensie/src/aplicatie.html antet/subsol; SECURITY.md -->
 
 ### Ce citește și de ce
 

@@ -218,14 +218,13 @@ Istoric 1.0. Formatul capturilor nu e precizat de pagina oficială; fișierele f
 
 Robert a ales **varianta 2 cu sloganul „Cât ai cheltuit de fapt pe eMAG”** (E16). Randarea finală este `placuta-2-slogan-cat-am-cheltuit-pe-emag-440x280.png`, în `outputs/magazin/` al livrabilelor sesiunii din 16 oct. 2026; sursa HTML este alături. Păstrează designul original: bonul, fundalul luminos, fonturile, sloganul și markerul galben, cu numele „Cât am cheltuit pe eMAG” și subtitlul „creat de Robert Pop”. Originalele din `docs/extensie/capturi/magazin/` rămân arhivă; varianta 1 nu a fost aleasă. Publicarea materialelor actuale este autorizată prin E22. Fișierele `preview-*` sunt dovezi înainte/după, nu imagini de încărcat în magazin.
 
-## 11. Declarația trader / non-trader (E10)
+## 11. Declarația trader / non-trader (E28, înlocuiește E10)
 
 Pagina oficială ([Trader disclosure](https://developer.chrome.com/docs/webstore/program-policies/trader-disclosure)) folosește definițiile Comisiei Europene: **trader** e cine acționează în scopuri legate de comerțul, afacerea, meseria sau profesia lui; **non-trader** e cine acționează în afara lor. Declarația o face dezvoltatorul și e responsabilitatea lui s-o facă exact.
 
-- **Ce se declară:** *non-trader*. Extensia e gratuită și open-source, publicată de o persoană fizică, fără abonament, reclame sau bani din ea (E10).
-- **Efectul:** utilizatorii din UE sunt anunțați că drepturile consumatorului din legislația de protecție a consumatorului nu se aplică contractelor dintre ei și un non-trader. Pagina oficială nu spune ce contact apare public pentru un non-trader.
-- **Când se schimbă:** dacă apar donații, reclame sau bani din extensie, declarația și încadrarea se reevaluează (specificația §8); atunci ar fi nevoie și de datele de identificare ale unui trader.
-- Interpretare, nu text de lege (Claude, în rolul de jurist cerut de Robert, 14 oct. 2026): faptele de mai sus (gratuit, open-source, fără bani, persoană fizică) susțin încadrarea ca non-trader. Risc rămas: dacă proiectul ar ajunge să fie văzut ca parte dintr-o activitate profesională sau comercială, încadrarea s-ar schimba. Decizia rămâne a lui Robert.
+- **Ce se declară (E28, 10 nov. 2026):** *trader*. Publisher-ul afișat este **Snow Globe Solutions**, iar entitatea declarată este **POP M. D. ROBERT PERSOANĂ FIZICĂ AUTORIZATĂ** (CUI 55776662), cu datele din `SnowGlobe/config/business.json`. Datele de contact cerute de Google le introduce Robert, direct în dashboard.
+- **Efectul:** datele de identificare și contact ale traderului apar public pe pagina extensiei, iar utilizatorii din UE păstrează drepturile din legislația de protecție a consumatorului față de un trader. Extensia rămâne gratuită, fără plăți sau reclame.
+- Interpretare, nu text de lege (Claude, în rolul de jurist cerut de Robert): publicarea sub marca unei firme, ca parte a portofoliului ei, este o activitate legată de profesie, deci *trader* este declarația exactă; *non-trader* sub numele unei firme ar fi fost inexactă. E10 (non-trader, persoană fizică) este înlocuită.
 
 ## 12. Alte câmpuri ale paginii
 
@@ -251,7 +250,7 @@ Etichetele din dashboard pot diferi puțin de cele de aici (interfața o ține G
 - **Rezultat:** acces la dashboard-ul existent; nu se confundă această verificare cu publicarea extensiei.
 
 **Pasul 2 [C]. Declarația trader / non-trader**
-- În dashboard, la contul tău, completezi declarația cerută și alegi **Non-trader** (E10; ce înseamnă, la §11).
+- [R] În dashboard, la Settings, publisher-ul rămâne **Snow Globe Solutions** și alegi **Trader**, cu datele PFA-ului (E28; ce înseamnă, la §11). Datele de contact le introduce Robert.
 - Costă: nu. Google poate cere mai târziu verificarea declarației. **Îmi trimiți:** „gata”.
 
 **Pasul 3 [C]. Arhiva**
