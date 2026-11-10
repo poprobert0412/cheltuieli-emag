@@ -29,7 +29,9 @@ const BOM = String.fromCharCode(0xfeff);
 const STATIC_IMPORT = /(?:^|\n)\s*(?:import|export)\s[^'"`;]*?from\s*['"]([^'"]+)['"]/g;
 const BARE_IMPORT = /(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g;
 const DYNAMIC_IMPORT = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
-const HTML_REFERENCE = /\b(?:src|href)="([^"]+)"/g;
+// Păstrează tipul elementului: un href pe <a> navighează la clic, unul pe <link> încarcă o resursă.
+const HTML_TAG = /<([a-z][a-z\d:-]*)\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi;
+const HTML_ATTRIBUTE = /(?:^|\s)([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
 
 /** Citește un fișier text UTF-8; un BOM de la început (Notepad îl scrie la JSON-uri) se scoate. */
 function readText(file) {
@@ -52,14 +54,23 @@ function checkManifestFiles(outDir, manifest) {
   }
 }
 
-/** Referințele paginilor HTML ale extensiei trebuie să existe; nicio resursă externă nu intră în pachet. */
+/** Resursele HTML trebuie să fie locale; doar navigarea HTTPS prin linkuri fără opener/referrer poate fi externă. */
 function checkHtmlReferences(outDir) {
   for (const page of listFiles(outDir).filter((name) => name.endsWith('.html'))) {
     const html = readFileSync(path.join(outDir, page), 'utf8');
-    for (const [, reference] of html.matchAll(HTML_REFERENCE)) {
-      if (reference.startsWith('#') || reference.startsWith('data:')) continue;
-      if (/^(?:[a-z]+:)?\/\//i.test(reference)) throw new Error(`${page} cere o resursă externă: ${reference}`);
-      if (!existsSync(path.resolve(outDir, path.dirname(page), reference.split('#')[0]))) throw new Error(`${page} cere ${reference}, dar fișierul lipsește din ${outDir}`);
+    for (const [, tag, rawAttributes] of html.matchAll(HTML_TAG)) {
+      const attributes = [...rawAttributes.matchAll(HTML_ATTRIBUTE)].map(([, name, double, single, bare]) => [name.toLowerCase(), double ?? single ?? bare]);
+      for (const [name, reference] of attributes.filter(([key]) => key === 'src' || key === 'href' || key.endsWith(':href'))) {
+        if (reference.startsWith('#') || reference.startsWith('data:')) continue;
+        if (tag.toLowerCase() === 'a' && name === 'href' && /^https:\/\//i.test(reference)) {
+          const url = new URL(reference);
+          const rel = (attributes.find(([key]) => key === 'rel')?.[1] ?? '').toLowerCase().split(/\s+/);
+          if (url.username || url.password || !rel.includes('noopener') || !rel.includes('noreferrer')) throw new Error(`${page} are un link extern neizolat: ${reference}`);
+          continue;
+        }
+        if (/^(?:[a-z]+:)?\/\//i.test(reference)) throw new Error(`${page} cere o resursă externă: ${reference}`);
+        if (!existsSync(path.resolve(outDir, path.dirname(page), reference.split('#')[0]))) throw new Error(`${page} cere ${reference}, dar fișierul lipsește din ${outDir}`);
+      }
     }
   }
 }

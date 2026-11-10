@@ -177,8 +177,16 @@ describe('aplicatie.html: fără scripturi inline, fără resurse externe, cu cl
     assert.doesNotMatch(APP_HTML, /\sstyle\s*=/i, 'atribut style');
   });
 
-  test('src și href sunt doar relative, ancore sau data: (nicio resursă externă)', () => {
-    for (const [, reference] of APP_HTML.matchAll(/\b(?:src|href)="([^"]+)"/g)) {
+  test('linkurile HTTPS izolate sunt navigare; resursele încărcate rămân locale', () => {
+    const withoutNavigation = APP_HTML.replace(/<a\b[^>]*>/gi, (anchor) => {
+      const href = /\bhref="([^"]+)"/.exec(anchor)?.[1];
+      if (!href || href.startsWith('#')) return anchor;
+      assert.equal(new URL(href).protocol, 'https:');
+      const rel = /\brel="([^"]+)"/.exec(anchor)?.[1].split(/\s+/) ?? [];
+      assert.ok(rel.includes('noopener') && rel.includes('noreferrer'));
+      return anchor.replace(/\bhref="[^"]+"/, '');
+    });
+    for (const [, reference] of withoutNavigation.matchAll(/\b(?:src|href)="([^"]+)"/g)) {
       assert.ok(reference.startsWith('#') || reference.startsWith('data:') || !/^(?:[a-z]+:)?\/\//i.test(reference), `resursă externă: ${reference}`);
     }
   });
@@ -381,6 +389,34 @@ describe('build: verificările opresc o extensie stricată', () => {
     });
     assert.throws(() => buildCopy(root), /resursă externă/);
   });
+
+  test('un link HTTPS izolat către orice domeniu este navigare, nu resursă externă', () => {
+    const root = brokenCopy((dir) => {
+      const file = path.join(dir, 'src', 'aplicatie.html');
+      writeFileSync(file, readFileSync(file, 'utf8').replace('</footer>', '<a title="Site > proiect" href="https://studio.exemplu.invalid/" rel="noreferrer noopener" target="_blank">Proiect</a></footer>'));
+    });
+    assert.doesNotThrow(() => buildCopy(root, { strict: true }));
+  });
+
+  for (const html of [
+    '<a href="http://exemplu.invalid/" rel="noopener noreferrer">Site</a>',
+    '<a href="https://exemplu.invalid/" rel="noopener">Site</a>',
+    '<a href="https://vizitator:exemplu@exemplu.invalid/" rel="noopener noreferrer">Site</a>',
+    '<a href="javascript:alert(1)">Site</a>',
+    '<a href="//exemplu.invalid/" rel="noopener noreferrer">Site</a>',
+    '<a href="https://exemplu.invalid/" rel="noopener noreferrer"><img src="https://exemplu.invalid/imagine.png"></a>',
+    "<script src='https://exemplu.invalid/cod.js'></script>",
+    '<link href=https://exemplu.invalid/stil.css rel=stylesheet>',
+    '<svg><use xlink:href="https://exemplu.invalid/desen.svg#marca"/></svg>',
+  ]) {
+    test(`build-ul refuză navigarea nesigură sau resursa externă: ${html}`, () => {
+      const root = brokenCopy((dir) => {
+        const file = path.join(dir, 'src', 'aplicatie.html');
+        writeFileSync(file, readFileSync(file, 'utf8').replace('</footer>', `${html}</footer>`));
+      });
+      assert.throws(() => buildCopy(root), /exemplu\.invalid|javascript:/);
+    });
+  }
 
   test('un import static fără țintă oprește build-ul', () => {
     const root = brokenCopy((dir) => {

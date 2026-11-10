@@ -1,6 +1,6 @@
 # Chrome Web Store: texte, formular de date și ghid de publicare
 
-**8 noiembrie 2026 — versiunea 1.1.0:** cele șase funcții aprobate adaugă panoul `sidePanel`, lista, țintele, bugetele, etichetele și exportul PNG. Câmpurile de mai jos descriu versiunea aprobată anterior; nu se copiază nemodificate pentru noul pachet. [Addendumul propus](aprobare-confidentialitate-2026-11-08.md) conține textele și justificările actualizate. Commit/push sunt autorizate după testele pe cont real; pașii rămași pentru publicarea oficială sunt în [predarea lansării](handoff/2026-11-08-lansare-extensie.md).
+**10 noiembrie 2026 — versiunea 1.1.0:** cele șase funcții aprobate adaugă panoul `sidePanel`, lista, țintele, bugetele, etichetele și exportul PNG. Robert a aprobat [addendumul](aprobare-confidentialitate-2026-11-08.md) pe 10 nov. 2026 (E26); textele lui sunt integrate în politică și în §4, §5, §7 și §9 de mai jos. Descrierea lungă (§3), capturile și plăcuța mică (§10) pentru 1.1.0 sunt aprobate tot pe 10 nov. 2026 (E27). Pașii rămași sunt în [predarea lansării](handoff/2026-11-08-lansare-extensie.md).
 
 Materialele pentru extensia **Cât am cheltuit pe eMAG**: numele, descrierile, justificările, răspunsurile din formularul de date, instrucțiunile pentru recenzent, imaginile și ghidul de publicare. Starea la 16 oct. 2026: identitatea, plăcuța 2 cu slogan, modul întunecat obligatoriu, criptarea locală, descrierile, politica și corecturile de interfață sunt **aprobate** (E15–E20). Robert a cerut lansare **publică de la început** (E21) și a autorizat asistentul să facă publicarea (E22). Sursele oficiale de mai jos au fost citite pe 14 oct. 2026; etichetele dashboard-ului se verifică la completare.
 
@@ -30,9 +30,9 @@ Cât ai plătit, de fapt, pe eMAG: citește comenzile și retururile din contul 
 
 Dacă Robert vrea alt text, se schimbă manifestul (dashboard-ul îl citește de acolo); `extensie/tests/unit/build.test.js` verifică ≤ 132 de caractere și mențiunea de neafiliere.
 
-## 3. Descrierea lungă (aprobată pe 16 oct. 2026)
+## 3. Descrierea lungă (aprobată pe 16 oct. 2026; completată pentru 1.1.0 pe 10 nov. 2026)
 
-Textul aprobat de Robert (E20), de lipit în câmpul „Description”:
+Textul aprobat de Robert (E20), cu completările 1.1.0 aprobate pe 10 nov. 2026 (E27), de lipit în câmpul „Description”:
 
 ```
 Cât ai plătit, de fapt, pe eMAG? Extensia citește comenzile și retururile din contul tău și calculează cât ai plătit efectiv pe ce ai păstrat, după reduceri, vouchere, anulări și retururi.
@@ -44,6 +44,11 @@ CE ÎȚI ARATĂ
 - Evoluția prețurilor pentru produsele cumpărate de mai multe ori.
 - Avertismente despre comenzile care necesită verificare.
 - Raport HTML, tabele CSV și date JSON pe care le poți descărca.
+- Planificarea campaniilor, ca Black Friday: perioada cu date și ore, lista de produse cu prețuri-țintă și bilanțul comenzilor din acel interval.
+- Bugete lunare sau anuale, comparate cu ce ai plătit efectiv.
+- Retururile fără rezultat sau fără rambursare, de urmărit.
+- Etichete personale pentru cumpărături și bilanțul anului ca imagine PNG, cu suma ascunsă dacă vrei.
+- Pe pagina unui produs eMAG, în panoul lateral Chrome: cât ai plătit ultima dată și minimul tău pentru același produs.
 
 CUM O FOLOSEȘTI
 
@@ -55,9 +60,9 @@ CUM O FOLOSEȘTI
 
 DATELE TALE
 
-Analiza se face local. Autorul nu primește istoricul cumpărăturilor și extensia nu are server sau telemetrie. Extensia citește paginile comenzilor și retururilor în memorie, apoi păstrează câmpurile necesare raportului. Nu extrage parola, codul 2FA, cookie-urile sau datele cardului. Browserul trimite către site sesiunea ta existentă, ca la o vizită obișnuită.
+Analiza se face local. Autorul nu primește istoricul cumpărăturilor și extensia nu are server sau telemetrie. Extensia citește paginile comenzilor și retururilor în memorie, apoi păstrează câmpurile necesare raportului. Pe o pagină de produs, doar la cererea ta, citește denumirea, adresa și prețul produsului principal. Nu extrage parola, codul 2FA, cookie-urile sau datele cardului. Browserul trimite către site sesiunea ta existentă, ca la o vizită obișnuită.
 
-Ultima analiză și jurnalul sunt păstrate criptat în profilul browserului. Cheia rămâne locală; nu introduci o parolă suplimentară. Cine folosește profilul tău deschis poate vedea raportul. „Șterge datele” elimină analiza, jurnalul și cheia locală. Fișierele descărcate sunt necriptate și trebuie șterse separat.
+Ultima analiză, jurnalul, lista de produse, bugetele și etichetele sunt păstrate criptat în profilul browserului. Cheia rămâne locală; nu introduci o parolă suplimentară. Cine folosește profilul tău deschis poate vedea raportul. „Șterge datele” elimină analiza, jurnalul, lista de produse, bugetele, etichetele și cheia locală. Fișierele descărcate, inclusiv imaginea bilanțului, sunt necriptate și trebuie șterse separat.
 
 DE ȘTIUT
 
@@ -74,26 +79,34 @@ Politica de confidențialitate: https://github.com/poprobert0412/cheltuieli-emag
 
 Cerința oficială: scopul trebuie să fie îngust și ușor de înțeles. Câmpul îl citesc recenzenții.
 
+Text aprobat pe 10 nov. 2026 (E26), pentru 1.1.0:
+
 ```
-Shows the user how much they actually paid on eMAG: it reads the user's own order and return history on www.emag.ro and builds a spending report locally in the browser.
+Help users understand and plan their own eMAG spending, with local purchase reports, budgets, return follow-up, personal labels, a wishlist and a product-page comparison against their own purchase history.
 ```
 
-În română: arată cât a plătit efectiv utilizatorul pe eMAG, din comenzile și retururile din propriul cont, într-un raport calculat local în browser. Tot ce face extensia (citirea, calculul, raportul, descărcările, „Șterge datele”) servește acestui scop.
+În română: ajută utilizatorul să-și înțeleagă și să-și planifice cheltuielile proprii pe eMAG: rapoarte locale, bugete, urmărirea retururilor, etichete personale, o listă de dorințe și comparația paginii de produs cu propriul istoric. Toate funcțiile servesc acestui scop.
 
 ## 5. Justificarea permisiunilor („Permission justification”)
 
-Câte un câmp pentru fiecare permisiune din manifest (`extensie/manifest.json`, rândurile 7-8). Textele, în engleză, se lipesc ca atare:
+Câte un câmp pentru fiecare permisiune din manifest (`extensie/manifest.json`, rândurile 7-8). Textele, în engleză, se lipesc ca atare; completările 1.1.0 pentru `storage` și `scripting` și justificarea `sidePanel` sunt aprobate pe 10 nov. 2026 (E26):
 
 **`storage`**
 
 ```
-Stores the last analysis (report figures, extracted orders and returns, and the run log) and the current run log locally with AES-GCM encryption. The key is generated locally and kept separately in the extension's IndexedDB storage; there is no extra password and the key is not sent to the author. The "Delete data" button deletes the analysis, log and local key. A short-lived "one analysis at a time" record is kept in chrome.storage.session. The theme preference is stored separately in localStorage. Extension data is not synced through the user's Google account.
+Stores the last analysis (report figures, extracted orders and returns, and the run log) and the current run log locally with AES-GCM encryption. The key is generated locally and kept separately in the extension's IndexedDB storage; there is no extra password and the key is not sent to the author. The "Delete data" button deletes the analysis, log and local key. A short-lived "one analysis at a time" record is kept in chrome.storage.session. The theme preference is stored separately in localStorage. Extension data is not synced through the user's Google account. Also stores the user's wishlist, observed and target prices, budgets, campaign dates and personal labels locally, encrypted. These preferences survive a new analysis and are removed by Delete data.
 ```
 
 **`scripting`**
 
 ```
-Runs small functions that are packaged in the extension (src/colectare/page_functions.js) inside the extension's own background work tab on www.emag.ro, in the isolated world (chrome.scripting.executeScript). They read the rendered order and return lists, check whether the user is logged in, click the "Vezi mai mult" (Load more) button of the returns list, and request the order and return detail pages with the user's own session. No code is fetched from the network.
+Runs small functions that are packaged in the extension (src/colectare/page_functions.js) inside the extension's own background work tab on www.emag.ro, in the isolated world (chrome.scripting.executeScript). They read the rendered order and return lists, check whether the user is logged in, click the "Vezi mai mult" (Load more) button of the returns list, and request the order and return detail pages with the user's own session. No code is fetched from the network. On the user's action, also reads the main product name, URL and available price from the active eMAG product page in the isolated world. It does not change the merchant page or execute remote code.
+```
+
+**`sidePanel`**
+
+```
+Displays the user's personal product comparison and target-price controls in Chrome's side panel while they view an eMAG product. The panel opens on the user's action and does not read other websites.
 ```
 
 **Host permission `https://www.emag.ro/*`**
@@ -102,7 +115,7 @@ Runs small functions that are packaged in the extension (src/colectare/page_func
 The only site the extension works on. It is needed to open and script the work tab on www.emag.ro and to see that tab's address, which tells the extension when the user was sent to the login page. The extension does not access any other site.
 ```
 
-Nu cere: `tabs`, `cookies`, `downloads`, `webRequest`, `<all_urls>`, scripturi de conținut, pagini accesibile din web. La instalare, Chrome arată un singur avertisment (citirea și modificarea datelor de pe `www.emag.ro`); pentru `storage` și `scripting` nu arată niciunul ([lista oficială](https://developer.chrome.com/docs/extensions/reference/permissions-list)). Politica magazinului cere cele mai înguste permisiuni necesare; o permisiune nouă cere schimbarea acestei secțiuni, a politicii și a gărzii `tests/test_garda_extensie.py`.
+Nu cere: `tabs`, `cookies`, `downloads`, `webRequest`, `<all_urls>`, scripturi de conținut, pagini accesibile din web. La instalare, Chrome arată un singur avertisment (citirea și modificarea datelor de pe `www.emag.ro`); pentru `storage` și `scripting` nu arată niciunul, iar pentru `sidePanel` se verifică la încărcarea ciornei 1.1.0 ([lista oficială](https://developer.chrome.com/docs/extensions/reference/permissions-list)). Politica magazinului cere cele mai înguste permisiuni necesare; o permisiune nouă cere schimbarea acestei secțiuni, a politicii și a gărzii `tests/test_garda_extensie.py`.
 
 ## 6. Cod de la distanță („Remote code”)
 
@@ -122,15 +135,17 @@ Politica magazinului cere ca formularul, politica de confidențialitate și comp
 
 | Tip | Se bifează? | De ce |
 |---|---|---|
-| Financial and payment information | **Da** | Sumele plătite și istoricul tranzacțiilor din comenzi și retururi (totaluri, vouchere, transport, rambursări). Nu numere de card |
-| Website content | **Da** | Textul și linkurile paginilor eMAG de comenzi și retururi, citite prin extensie |
+| Financial and payment information | **Da** | Sumele plătite și istoricul tranzacțiilor din comenzi și retururi (totaluri, vouchere, transport, rambursări); din 1.1.0 și prețurile observate, prețurile-țintă și bugetele introduse de utilizator. Nu numere de card |
+| Website content | **Da** | Textul și linkurile paginilor eMAG de comenzi și retururi, citite prin extensie; din 1.1.0 și denumirea, adresa și prețul produsului principal, la cererea utilizatorului |
 | Personally identifiable information | **Da** | Paginile procesate temporar pot include datele cumpărătorului, chiar dacă acestea nu sunt extrase în câmpuri dedicate; declarare aprobată prin E20 |
 | Health information | Nu | Nu citește și nu caută date de sănătate. Numele produselor cumpărate sunt text de produs: pot sugera ce a cumpărat omul, dar nu sunt simptome, diagnostice sau istoric medical (judecată proprie, de confirmat la completare) |
 | Authentication information | Nu | Parola, codul 2FA și cookie-urile nu sunt citite: omul se loghează în pagina eMAG |
 | Personal communications | Nu | Nu citește mesaje, e-mailuri sau chat |
 | Location | Nu | Nu citește locația |
-| Web history | **Da** | Numai adresele necesare filei de lucru și căile comenzilor/retururilor; nu istoricul general al navigării. Declarare aprobată prin E20; se potrivește etichetei „Web browsing activity” dacă dashboard-ul o folosește |
+| Web history | **Da** | Numai adresele necesare filei de lucru, căile comenzilor/retururilor și, din 1.1.0, adresa paginii de produs citite la cerere sau salvate în listă; nu istoricul general al navigării. Declarare aprobată prin E20; se potrivește etichetei „Web browsing activity” dacă dashboard-ul o folosește |
 | User activity | Nu | Nu urmărește clicuri, mișcarea mouse-ului sau tastele; singurul clic în pagina eMAG e al extensiei („Vezi mai mult”) |
+
+Lista de produse și etichetele personale (1.1.0) sunt conținut introdus de utilizator. Dacă dashboard-ul are o categorie pentru conținut generat de utilizatori, se bifează și aceea; altfel sunt acoperite de rândurile de mai sus (adrese, prețuri, bugete) și de politica publică (E26).
 
 Lista oficială de exemple de date de utilizator (User Data FAQ, întrebarea 4): date personale (inclusiv numere de identificare), informații financiare și de plată, informații de sănătate, informații de autentificare, conținut și resurse ale site-urilor, date din formulare, activitate de navigare, comunicații personale și conținut generat de utilizatori.
 
@@ -168,7 +183,8 @@ No eMAG account is needed to review this extension.
 2. Click "Încearcă cu date inventate" ("Try with invented data"), the secondary button under "Pornește analiza". A full report built from invented orders appears. This path reads nothing from any account and makes no network request. You can download raport.html and analiza.json from the report.
 3. Optional: click "Pornește analiza" ("Start the analysis"). The extension opens a background tab on https://www.emag.ro/history/shopping?time=older. Without an eMAG login it shows the screen "Loghează-te în eMAG" ("Log in to eMAG") and waits up to 10 minutes. It never types into the page and never reads the password. Click "Oprește" ("Stop") to cancel; the work tab is closed.
 4. A real analysis needs a Romanian eMAG account (www.emag.ro). After the user logs in, the extension reads the order and return history with GET requests made from that tab (3 detail pages at a time) and shows the report. No shared test account is provided: an eMAG account holds a person's purchase history, and the demo path above shows the whole interface and report.
-5. Everything is in the package: no remote code, and only these permissions: storage, scripting and the host permission https://www.emag.ro/*. The source code and the tests are public: https://github.com/poprobert0412/cheltuieli-emag (folder extensie/). The extension page is in Romanian only.
+5. Side panel (version 1.1.0): open any product page on https://www.emag.ro/ and click the extension's toolbar icon. Chrome's side panel opens and, on "Citește produsul" ("Read the product"), the extension reads the product name, URL and price from that page and compares them locally with the user's own purchases. Without a saved analysis there is nothing to compare, but the reading and the target-price controls still work. On any other page the toolbar icon opens the extension page instead.
+6. Everything is in the package: no remote code, and only these permissions: storage, scripting, sidePanel and the host permission https://www.emag.ro/*. The only external link is the "Snow Globe" footer link (https://snowglobe.ro/), opened by the user in a new tab with noopener and noreferrer; no data is sent with it. The source code and the tests are public: https://github.com/poprobert0412/cheltuieli-emag (folder extensie/). The extension page is in Romanian only.
 ```
 
 Fiecare pas e verificabil în cod: butoanele (`extensie/src/aplicatie.html:82`, `:98`, `:176`), prima adresă din fila de lucru (`extensie/src/settings.js:6-7`), așteptarea de 10 minute (`:36`), 3 pagini deodată (`:30`), demo-ul fără rețea (`extensie/src/ecrane/main.js:61` și `connect-src 'none'`).
@@ -180,11 +196,19 @@ Cerințele oficiale ([imagini](https://developer.chrome.com/docs/webstore/images
 | Imagine | Cerință oficială | Stare |
 |---|---|---|
 | Iconița magazinului | 128×128 px, PNG; desenul de 96×96 px, cu margine transparentă de 16 px | **Gata:** `extensie/src/iconite/icon-128.png` (128×128, desenul ocupă pixelii 16-111, măsurat). Bonul aplicației pe un pătrat deschis cu colțuri rotunjite, varianta B (E13); e și iconița din manifest |
-| Capturi | cel puțin 1, cel mult 5; 1280×800 px (preferat) sau 640×400 px; colțuri drepte, fără margini | **Actualizate pe 16 oct. 2026:** 5 PNG-uri de 1280×800 px, RGB, în `outputs/magazin/` al sesiunii; sursele construite actuale, numele și textele aprobate. Imaginile din `docs/extensie/capturi/magazin/` sunt arhiva din 14 octombrie |
-| Plăcuța mică | 440×280 px | **Varianta 2 cu slogan aprobată** pe 16 oct. 2026 (E16); antetul folosește numele și autorul din E15 |
+| Capturi | cel puțin 1, cel mult 5; 1280×800 px (preferat) sau 640×400 px; colțuri drepte, fără margini | **1.1.0, aprobate pe 10 nov. 2026 (E27):** 5 PNG-uri din `docs/extensie/capturi/2026-11-10-magazin/`, ordinea de mai jos. Istoric 1.0, **actualizate pe 16 oct. 2026:** 5 PNG-uri de 1280×800 px, RGB, în `outputs/magazin/` al sesiunii; sursele construite actuale, numele și textele aprobate. Imaginile din `docs/extensie/capturi/magazin/` sunt arhiva din 14 octombrie |
+| Plăcuța mică | 440×280 px | **Varianta 2 cu slogan aprobată** pe 16 oct. 2026 (E16); antetul folosește numele și autorul din E15. Randarea 1.1.0, aprobată pe 10 nov. 2026 (E27): `docs/extensie/capturi/2026-11-10-magazin/placuta-mica-440x280.png` |
 | Plăcuța mare (marquee) | 1400×560 px, opțională | Nu e planificată |
 
-Formatul capturilor nu e precizat de pagina oficială; fișierele finale sunt PNG RGB, fără transparență. Ordinea pentru cele 5 capturi actuale (de la prima, cea mai importantă), toate din `outputs/magazin/`:
+Ordinea capturilor 1.1.0 (E27), toate din `docs/extensie/capturi/2026-11-10-magazin/`, tema luminoasă, date demonstrative:
+
+1. `1-raport-light-1280x800.png`: raportul, cifra mare și lanțul de la comandat la plătit;
+2. `3-black-friday-light-1280x800.png`: Black Friday — perioada, bugetul și lista cu ținte (produse inventate);
+3. `5-buget-light-1280x800.png`: bugetul anual;
+4. `6-recap-light-1280x800.png`: bilanțul anului ca imagine;
+5. `4-gata-de-start-light-1280x800.png`: ecranul de start, cu „Încearcă cu date inventate”.
+
+Istoric 1.0. Formatul capturilor nu e precizat de pagina oficială; fișierele finale sunt PNG RGB, fără transparență. Ordinea pentru cele 5 capturi actuale (de la prima, cea mai importantă), toate din `outputs/magazin/`:
 
 1. `1-raport-cifra-mare-si-lantul-1280x800.png`: raportul demonstrativ, cifra mare și lanțul de la comandat la plătit;
 2. `2-categorii-1280x800.png`: „Pe ce s-au dus banii”, pe categorii;
@@ -215,7 +239,7 @@ Pagina oficială ([Trader disclosure](https://developer.chrome.com/docs/webstore
 | Site-ul extensiei | `https://github.com/poprobert0412/cheltuieli-emag` | Codul și documentația |
 | Adresa de suport | `https://github.com/poprobert0412/cheltuieli-emag/issues` | Fără numere de comandă în mesaje |
 | Politica de confidențialitate | adresa din §7 | |
-| Versiunea | 1.0.0 | Din `extensie/manifest.json` (E8); fiecare urcare nouă cere o versiune mai mare |
+| Versiunea | 1.1.0 | Din `extensie/manifest.json` (E8); fiecare urcare nouă cere o versiune mai mare |
 
 ## 13. Ghid pas cu pas
 

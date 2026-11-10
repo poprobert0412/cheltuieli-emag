@@ -1,6 +1,6 @@
 # Addendum propus — cumpărături și panou Chrome
 
-8 noiembrie 2026. Textele de mai jos sunt pregătite pentru aprobarea înaintea publicării noilor funcții. Politica aprobată anterior rămâne în `CONFIDENTIALITATE-EXTENSIE.md`; acest document nu afirmă o aprobare nouă.
+8 noiembrie 2026. Textele de mai jos sunt pregătite pentru aprobarea înaintea publicării noilor funcții. Politica aprobată anterior rămâne în `CONFIDENTIALITATE-EXTENSIE.md`; acest document nu afirmă o aprobare nouă. **Aprobat de Robert pe 10 noiembrie 2026 (E26)** și integrat în politică și în `MAGAZIN-EXTENSIE.md`.
 
 ## Politica: completări exacte
 
@@ -39,3 +39,20 @@ Formularul de date trebuie să declare și conținutul introdus de utilizator (l
 - Aprobarea acestor texte, apoi înlocuirea afirmațiilor vechi „numai raportul” și „două permisiuni” din politica și formularul public.
 - Citirea pe o pagină de produs eMAG reală a trecut ulterior în acceptanța autorizată din 08.11.2026, inclusiv comparația și salvarea țintei; proba publică veche HTTP 410 nu mai este un blocaj al acestei verificări.
 - O versiune nouă pentru lansare, pachetul verificat și acordul explicit de publicare în magazin; E25 autorizează separat commit-ul și push-ul de pe PC după acceptanță, fără a echivala cu trimiterea în Chrome Web Store.
+
+## Descrierea lungă 1.1.0 — APROBAT de Robert pe 10 noiembrie 2026 (E27)
+
+Descrierea aprobată în E20 (`MAGAZIN-EXTENSIE.md` §3) rămâne neschimbată, cu excepția schimbărilor numerotate de mai jos. Temei: descrierea din magazin nu trebuie să contrazică politica și formularul de date (politica Chrome Web Store privind metadatele și User Data FAQ); cele două paragrafe despre date ar fi devenit incomplete după E26.
+
+1. În „CE ÎȚI ARATĂ”, după rândul cu exporturile, se adaugă:
+   - „Planificarea campaniilor, ca Black Friday: perioada cu date și ore, lista de produse cu prețuri-țintă și bilanțul comenzilor din acel interval.”
+   - „Bugete lunare sau anuale, comparate cu ce ai plătit efectiv.”
+   - „Retururile fără rezultat sau fără rambursare, de urmărit.”
+   - „Etichete personale pentru cumpărături și bilanțul anului ca imagine PNG, cu suma ascunsă dacă vrei.”
+   - „Pe pagina unui produs eMAG, în panoul lateral Chrome: cât ai plătit ultima dată și minimul tău pentru același produs.”
+2. În „DATELE TALE”, după fraza „Extensia citește paginile comenzilor și retururilor în memorie, apoi păstrează câmpurile necesare raportului.” se adaugă: „Pe o pagină de produs, doar la cererea ta, citește denumirea, adresa și prețul produsului principal.”
+3. Fraza „Ultima analiză și jurnalul sunt păstrate criptat în profilul browserului.” devine: „Ultima analiză, jurnalul, lista de produse, bugetele și etichetele sunt păstrate criptat în profilul browserului.”
+4. Fraza „«Șterge datele» elimină analiza, jurnalul și cheia locală.” devine: „«Șterge datele» elimină analiza, jurnalul, lista de produse, bugetele, etichetele și cheia locală.”
+5. Fraza „Fișierele descărcate sunt necriptate și trebuie șterse separat.” devine: „Fișierele descărcate, inclusiv imaginea bilanțului, sunt necriptate și trebuie șterse separat.”
+
+Verificat la 10.11.2026: `docs/FUNCTII-CUMPARATURI.md` („Folosire”, „Date și limite”), `extensie/src/panou/sidepanel.js` (`readProduct`, `refreshHistory`), `extensie/src/aplicatie.html:210`. Starea: aprobat („Da, toate 1–11”), integrat în `MAGAZIN-EXTENSIE.md` §3; se arată în ciorna din dashboard înainte de trimitere.

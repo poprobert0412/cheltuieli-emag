@@ -10,6 +10,7 @@ Ce s-a schimbat în fiecare versiune a extensiei Chrome „Cât am cheltuit pe e
 - Bilanț anual PNG din previzualizare, cu opțiunea de ascundere a sumei.
 - Preferințele sunt criptate local, actualizate atomic între pagini și eliminate de „Șterge datele”; demo rămâne în memorie.
 - Permisiune nouă `sidePanel`, fără gazde noi; calculele raportului păstrează paritatea cu Python.
+- Subsolul paginii are rândul „Un proiect Snow Globe”, aprobat pe 8 noiembrie 2026; linkul spre `https://snowglobe.ro/` se deschide într-o filă nouă, fără opener și referrer, iar build-ul refuză orice alt link extern neizolat.
 
 ## 1.0.0 — 2026-10-20
 

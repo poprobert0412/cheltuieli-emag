@@ -1,6 +1,6 @@
 # Politica de confidențialitate: Cât am cheltuit pe eMAG
 
-Ultima actualizare: 20 octombrie 2026. Se aplică extensiei Chrome, versiunea 1.0.0. Text aprobat de Robert pe 16 octombrie 2026 (E20). Practicile descrise sunt neschimbate.
+Ultima actualizare: 10 noiembrie 2026. Se aplică extensiei Chrome, versiunea 1.1.0. Text aprobat de Robert pe 16 octombrie 2026 (E20), cu completările pentru funcțiile de cumpărături aprobate pe 10 noiembrie 2026 (E26).
 
 **Cât am cheltuit pe eMAG** este un proiect independent al lui Robert Pop, gratuit pentru utilizator. Nu este afiliat cu eMAG. Contactul și raportarea problemelor sunt disponibile în [depozitul proiectului](https://github.com/poprobert0412/cheltuieli-emag); nu publica acolo comenzi sau fișiere cu datele tale. Vulnerabilitățile se raportează conform SECURITY.md. <!-- temei: docs/DECIZII.md E15/E20; extensie/src/aplicatie.html antet/subsol; SECURITY.md -->
 
@@ -12,9 +12,13 @@ Paginile sunt procesate în memorie și pot conține date personale afișate de 
 
 Se extrag numerele și datele comenzilor, vânzătorii, produsele și cantitățile, statusurile, sumele, reducerile, voucherele, transportul și taxele. Pentru retururi se extrag identificatorii și căile paginilor, comenzile și produsele asociate, statusurile și informațiile despre restituire. Unele texte sunt preluate din pagini; dacă structura site-ului se schimbă, pot include text nedorit din apropiere. <!-- temei: extensie/src/calcul/models.js; extensie/src/calcul/order_parser.js; extensie/src/calcul/return_parser.js -->
 
+Când deschizi panoul din iconița extensiei pe o pagină de produs sau apeși „Citește produsul”, extensia citește denumirea, adresa și prețul disponibil al produsului principal. Le compară local cu cumpărăturile tale. Nu monitorizează automat alte pagini sau prețuri. <!-- temei: docs/DECIZII.md E26; extensie/src/background.js handleActionClick; extensie/src/panou/active_product.js; extensie/src/panou/product_page.js; extensie/src/panou/sidepanel.js readProduct -->
+
 ### Ce păstrează și cât timp
 
-Se păstrează local doar ultima analiză reușită: raportul, comenzile și retururile extrase, data, versiunea, pragul ales și jurnalul. O analiză nouă o înlocuiește numai după încheiere și salvare reușită. Jurnalul rulării curente se scrie pe parcurs; după o eroare poate rămâne până la rularea următoare sau ștergere. <!-- temei: extensie/src/stocare/last_analysis.js saveLastAnalysis; extensie/src/stocare/run_log.js RunLog; extensie/src/rulare/run_pipeline.js -->
+Din analize se păstrează local doar ultima analiză reușită: raportul, comenzile și retururile extrase, data, versiunea, pragul ales și jurnalul. O analiză nouă o înlocuiește numai după încheiere și salvare reușită. Jurnalul rulării curente se scrie pe parcurs; după o eroare poate rămâne până la rularea următoare sau ștergere. <!-- temei: extensie/src/stocare/last_analysis.js saveLastAnalysis; extensie/src/stocare/run_log.js RunLog; extensie/src/rulare/run_pipeline.js -->
+
+La cererea ta, extensia păstrează în browser lista de produse, adresele și prețurile observate, prețurile-țintă, bugetele, perioada aleasă și etichetele personale. Aceste date sunt criptate local împreună cu analiza și jurnalul, rămân până le modifici sau le ștergi și nu sunt trimise autorului. O analiză nouă păstrează lista și preferințele. <!-- temei: docs/DECIZII.md E26; extensie/src/cumparaturi/shopping_schema.js; extensie/src/cumparaturi/shopping_store.js; extensie/src/stocare/private_storage.js -->
 
 Analiza și jurnalul sunt criptate cu AES-GCM. Cheia criptografică este generată local și păstrată separat, în spațiul extensiei din browser, fără a fi transmisă autorului. Această protecție nu blochează accesul unei persoane care controlează profilul browserului sau folosește extensia deja deschisă. Nu există o parolă suplimentară pentru raport. <!-- temei: extensie/src/stocare/storage_encryption.js encryptRecord/decryptRecord; extensie/src/stocare/key_store.js createKeyStore; extensie/src/stocare/private_storage.js ensureKey; docs/DECIZII.md E18 -->
 
@@ -24,12 +28,14 @@ Evidența unei analize în curs rămâne în memoria sesiunii browserului. Prefe
 
 Autorul nu primește datele citite și nu are server de colectare, telemetrie sau reclame. Extensia solicită pagini de pe www.emag.ro prin fila de lucru. Browserul folosește sesiunea ta pentru aceste cereri. Site-ul și serviciile încărcate de paginile lui primesc cererile unei vizite obișnuite; acestea sunt guvernate de politicile lor. Instalarea și actualizările prin Chrome Web Store sunt administrate de Google. <!-- temei: extensie/src/colectare/page_functions.js; extensie/src/colectare/work_tab.js; extensie/src/aplicatie.html CSP; extensie/manifest.json; https://developer.chrome.com/docs/extensions/develop/distribute/host -->
 
-Datele sunt folosite numai pentru raport, nu pentru publicitate, vânzare, evaluarea bonității sau acordarea de credite. Utilizarea lor respectă politica Chrome Web Store pentru datele utilizatorilor, inclusiv cerințele Limited Use. <!-- temei: docs/DECIZII.md E20; https://developer.chrome.com/docs/webstore/program-policies/limited-use; https://developer.chrome.com/docs/webstore/program-policies/user-data-faq -->
+Datele sunt folosite numai pentru raport și pentru funcțiile de cumpărături ale extensiei (listă, ținte, bugete, retururi, etichete, bilanț), nu pentru publicitate, vânzare, evaluarea bonității sau acordarea de credite. Utilizarea lor respectă politica Chrome Web Store pentru datele utilizatorilor, inclusiv cerințele Limited Use. <!-- temei: docs/DECIZII.md E20; https://developer.chrome.com/docs/webstore/program-policies/limited-use; https://developer.chrome.com/docs/webstore/program-policies/user-data-faq -->
 
 ### Ștergere și exporturi
 
-„Șterge datele” elimină analiza, jurnalul și cheia locală. Dezinstalarea elimină stocarea extensiei. Preferința de temă și sesiunea contului eMAG sunt separate de analiza salvată. Ștergerea istoricului general de navigare nu este echivalentă cu ștergerea datelor extensiei. <!-- temei: extensie/src/stocare/last_analysis.js deleteAllData; extensie/src/stocare/private_storage.js clear; interfata/assets/app-theme.js; https://developer.chrome.com/docs/extensions/reference/api/storage -->
+„Șterge datele” elimină analiza, jurnalul, lista de produse, bugetele, etichetele și cheia locală. Datele afișate în celelalte pagini ale extensiei sunt invalidate. Fișierele descărcate anterior se șterg separat. Dezinstalarea elimină stocarea extensiei. Preferința de temă și sesiunea contului eMAG sunt separate de analiza salvată. Ștergerea istoricului general de navigare nu este echivalentă cu ștergerea datelor extensiei. <!-- temei: extensie/src/stocare/last_analysis.js deleteAllData; extensie/src/stocare/private_storage.js clear; interfata/assets/app-theme.js; https://developer.chrome.com/docs/extensions/reference/api/storage -->
 
 Exporturile HTML, CSV, JSON și TXT sunt necriptate, sunt salvate la cererea ta în folderul de descărcări și nu sunt șterse de extensie. Pot conține istoricul cumpărăturilor și numere de comandă; verifică-le înainte să le distribui. <!-- temei: extensie/src/exporturi/export_files.js REAL_FILES; extensie/src/exporturi/descarcare.js; extensie/src/aplicatie.html descărcări -->
+
+Poți descărca local bilanțul anual ca imagine PNG necriptată. Imaginea conține anul și totalurile previzualizate, fără numere de comandă sau denumiri de produse; suma poate fi ascunsă înainte de descărcare. Extensia nu publică imaginea. <!-- temei: docs/DECIZII.md E26; extensie/src/cumparaturi/recap_export.js recapData/downloadRecap; extensie/src/cumparaturi/recap_view.js -->
 
 Modificările acestei politici sunt indicate prin data actualizării și istoricul fișierului din depozitul proiectului. <!-- temei: istoricul docs/CONFIDENTIALITATE-EXTENSIE.md din depozitul proiectului -->

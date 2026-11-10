@@ -3,7 +3,7 @@
 Primește: extensie/manifest.json, extensie/src/** (JS, HTML, CSS) și tot ce urcă în git din extensie/ (tests.garda_support.files_to_publish).
 Verifică: (1) manifestul cere exact `storage`, `scripting`, `sidePanel` și accesul la https://www.emag.ro/*, fără scripturi de conținut, resurse accesibile din web, conectare externă sau politică de conținut proprie;
 (2) în JS: `fetch` doar în colectare/page_functions.js, fără alte căi de rețea sau de cod dinamic (XMLHttpRequest, WebSocket, eval, innerHTML, chrome.cookies...), adrese în literale doar https://www.emag.ro, importuri doar relative;
-(3) în HTML: fără script inline și fără resurse de pe alte gazde; în CSS: fără @import sau url() către alte gazde; (4) în tot extensie/ (fără node_modules, dist, build): fără caractere invizibile, fără NBSP și fără litere cu sedilă;
+(3) în HTML: fără script inline și fără resurse de pe alte gazde; linkuri externe doar spre https://www.emag.ro/... și adresele exacte din ALLOWED_EXTERNAL_LINKS, cu rel="noopener noreferrer"; în CSS: fără @import sau url() către alte gazde; (4) în tot extensie/ (fără node_modules, dist, build): fără caractere invizibile, fără NBSP și fără litere cu sedilă;
 (5) nimic din extensie/ nu e ignorat de git în tăcere. Fiecare detector e probat pe un cod-capcană care trebuie să pice (și pe cod curat care nu trebuie să pice).
 Ce NU face: nu e un analizor complet de JavaScript (la îndoială, e mai strict), nu citește extensia construită din dist/ și nu o rulează (asta fac testele din extensie/tests/e2e/, cu rețeaua blocată).
 """
@@ -107,6 +107,9 @@ JAVASCRIPT_URL = re.compile(r"(?i)\bjavascript\s*:")
 # Spații de nume XML: identificatori (de exemplu la createElementNS), nu cereri de rețea.
 XML_NAMESPACE_URLS = frozenset({"http://www.w3.org/2000/svg", "http://www.w3.org/1999/xlink", "http://www.w3.org/1999/xhtml"})
 ALLOWED_URL_HOST = "www.emag.ro"
+# Linkuri externe aprobate explicit, pe care omul le deschide la clic (nu resurse): subsolul „Un proiect Snow Globe”, aprobat de Robert pe 08.11.2026 (docs/DECIZII.md, E26).
+# Potrivire exactă: altă cale sau altă schemă pe același domeniu rămâne refuzată.
+ALLOWED_EXTERNAL_LINKS = frozenset({"https://snowglobe.ro/"})
 
 
 def _line_of(text: str, index: int) -> int:
@@ -249,19 +252,20 @@ def html_problems(text: str, label: str) -> list[str]:
                 candidates = [part.strip().split()[0] for part in value.split(",") if part.strip()]
                 problems.extend(f"{where}: srcset cu «{candidate}»: resursă de pe altă gazdă" for candidate in candidates if not is_local_reference(candidate))
             elif tag == "a" and name == "href" and not is_local_reference(value):
-                problems.extend(_emag_link_problems(value, attrs, where))
+                problems.extend(_external_link_problems(value, attrs, where))
             elif not is_local_reference(value):
                 problems.append(f"{where}: <{tag} {name}=\"{value}\">: resursă de pe altă gazdă; extensia trebuie să meargă fără internet")
     return problems
 
 
-def _emag_link_problems(value: str, attrs: dict[str, str], where: str) -> list[str]:
-    """Un link către altă gazdă: permis doar https://www.emag.ro/..., cu rel=\"noopener noreferrer\", deschis de om la clic."""
-    if not is_allowed_url(value.strip()) or urlsplit(value.strip()).scheme != "https":
-        return [f"{where}: <a href=\"{value}\">: singurul link extern permis e https://www.emag.ro/..."]
+def _external_link_problems(value: str, attrs: dict[str, str], where: str) -> list[str]:
+    """Un link către altă gazdă: permis doar https://www.emag.ro/... sau o adresă exactă din ALLOWED_EXTERNAL_LINKS, cu rel=\"noopener noreferrer\", deschis de om la clic."""
+    url = value.strip()
+    if url not in ALLOWED_EXTERNAL_LINKS and (not is_allowed_url(url) or urlsplit(url).scheme != "https"):
+        return [f"{where}: <a href=\"{value}\">: singurul link extern permis e https://www.emag.ro/... sau o adresă aprobată din ALLOWED_EXTERNAL_LINKS"]
     rel = set(attrs.get("rel", "").lower().split())
     if not {"noopener", "noreferrer"} <= rel:
-        return [f"{where}: link către eMAG fără rel=\"noopener noreferrer\": pagina eMAG ar primi legătura cu fila extensiei și adresa ei"]
+        return [f"{where}: link extern fără rel=\"noopener noreferrer\": pagina deschisă ar primi legătura cu fila extensiei și adresa ei"]
     return []
 
 
@@ -510,6 +514,8 @@ def test_the_fetch_exception_needs_exactly_one_fetch_in_its_file():
     ("<form action='https://exemplu.invalid/'></form>", "resursă de pe altă gazdă"), ("<button formaction='https://exemplu.invalid/'>x</button>", "resursă de pe altă gazdă"),
     ("<a href='https://exemplu.invalid/'>x</a>", "singurul link extern"), ("<a href='https://www.emag.ro/x'>x</a>", "fără rel"),
     ("<a href='https://www.emag.ro/x' rel='noopener'>x</a>", "fără rel"), ("<a href='http://www.emag.ro/x' rel='noopener noreferrer'>x</a>", "singurul link extern"),
+    ("<a href='https://snowglobe.ro/'>x</a>", "fără rel"), ("<a href='https://snowglobe.ro/altceva' rel='noopener noreferrer'>x</a>", "singurul link extern"),
+    ("<a href='http://snowglobe.ro/' rel='noopener noreferrer'>x</a>", "singurul link extern"), ("<a href='https://exemplu.snowglobe.ro/' rel='noopener noreferrer'>x</a>", "singurul link extern"),
     ("<a href='javascript:alert(1)'>x</a>", "javascript:"), ("<a href='#x' ping='https://exemplu.invalid/'>x</a>", "ping"),
     ("<button onclick=\"alert(1)\">x</button>", "cod inline"), ("<body onload='x()'>", "cod inline"),
     ("<meta http-equiv='refresh' content='0;url=x'>", "refresh"),
@@ -534,6 +540,7 @@ def test_page_detector_catches_trap_pages(html, expected):
     "<link rel='stylesheet' href='extensie.css'><link rel='icon' type='image/png' href='iconite/icon-32.png'>",
     "<a href='#faq-nu-merge'>x</a><a href='aplicatie.html'>y</a><a href='' >z</a>",
     "<a href='https://www.emag.ro/history/shoppingdetails/1' target='_blank' rel='noopener noreferrer'>x</a>",
+    "<a href='https://snowglobe.ro/' target='_blank' rel='noopener noreferrer' translate='no'>Snow Globe</a>",
     "<img src='data:image/png;base64,AAAA'><img src='iconite/a.png' srcset='iconite/a.png 1x, iconite/b.png 2x'>",
     "<p>Text cu https://exemplu.invalid și fetch() în paragraf, <b>fără</b> resurse.</p>",
     "<meta http-equiv='Content-Security-Policy' content=\"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'\">",
